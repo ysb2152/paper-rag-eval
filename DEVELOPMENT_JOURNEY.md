@@ -6,6 +6,7 @@
 
 | 날짜(ISO) | 분류 | 내용 | 관련ID |
 |---|---|---|---|
+| 2026-09-08 | decision | P0-3 개정 — 채점 무료 로컬/Qasper-F1/NLI, Claude 는 비교·검증용(하드 의존 아님), 생성 로컬7B↔Claude ablation축 | P0-3 |
 | 2026-09-08 | decision | 스택·평가셋·주차계획 확정, 리포 스캐폴딩 | P0-1 ~ P0-6 |
 | 2026-09-08 | docs | DEVELOPMENT_JOURNEY / README / EVALUATION 3분리 골격 생성 | — |
 
@@ -31,10 +32,15 @@
 - **제약/미지수:** 10GB VRAM — bge-m3(560M) + 리랭커 동시 상주 시 배치 크기 조정 필요. full-text 임베딩 시 인덱싱 시간 측정 예정.
 - **기각:** Voyage/OpenAI 임베딩 — 실험 반복마다 과금, 포트폴리오상 "로컬 ML" 어필 손실.
 
-### P0-3. 생성·평가(LLM-judge) = Claude API
-- **결정:** 답변 생성 + LLM-as-judge 는 Claude API. 모델 선택은 벤치 후 확정(기본 후보: 생성 `claude-sonnet-5`, judge `claude-opus-5` 또는 동급). 모델 ID·요금은 [claude-api 스킬 기준]으로 착수 시 재확인.
-- **근거:** 프로젝트의 유일한 과금 지점을 여기로 한정. Batch API(50% 절감) + 소형 dev eval셋으로 비용 통제.
-- **제약:** LLM-judge 호출 수 = eval셋 크기 × ablation config 수. 초기 예산 감각 **~$50–100** (eval 100–150 × config 6–8). 실측으로 갱신 예정.
+### P0-3. 채점은 무료 로컬/표준지표, Claude 는 하드 의존이 아니라 비교·검증용 (2026-09-08 개정)
+- **초기 가정(폐기):** 생성·채점을 모두 Claude API 로. → 유일 과금이 채점(LLM-judge)에 몰려 예산 리스크. 또한 LLM-judge 는 채점 기준 자체라 재현성·객관성 약점.
+- **개정 결정:**
+  - **정량 채점 백본 = 전부 무료·재현 가능.** 검색은 gold evidence 자동채점(recall@k/MRR/nDCG). 답변 정확도는 **Qasper 공식 Answer-F1**(이 벤치마크의 표준 지표). Faithfulness/환각은 **로컬 NLI 모델**(evidence ⊨ answer 함의)로 근사.
+  - **답변 생성 = 로컬 7B + Claude 를 ablation 축으로.** `Qwen2.5-7B-Instruct`(4-bit, 10GB 상주) vs `claude-sonnet-5` vs `claude-opus-5`. 생성 모델 품질을 측정 대상으로 삼음(컨셉 정합).
+  - **LLM-as-judge = 선택적 검증 도구.** 소량만 돌려 "judge 점수 vs F1/NLI 상관" 을 보여 judge 신뢰도 검증. Claude Haiku + Batch API 로 ~$10–20. 미실행해도 프로젝트 성립.
+- **근거:** (1) 정량 백본이 무료라 예산 리스크 제거·완전 로컬 재현 가능(포트폴리오 강점). (2) Qasper 는 원래 F1 채점 벤치마크 → 표준 지표가 임시 LLM-judge보다 객관적. (3) Claude 를 "프리미엄 비교 대상"으로 두면 로컬 vs API 트레이드오프를 **측정으로** 보여줄 수 있음.
+- **기각:** 생성·채점 전면 Claude — 예산 리스크 + 채점 객관성 약화. / 채점 전면 로컬 LLM-judge — 7B judge 신뢰도 부족, 표준 F1 대비 이점 없음.
+- **미지수:** 로컬 NLI 모델 선정(예: DeBERTa-v3 MNLI/ANLI)·faithfulness 근사 정확도, Qasper unanswerable/abstractive 답변의 F1 처리, 7B 생성 VRAM(임베딩·리랭커와 동시 상주 시 스케줄링).
 
 ### P0-4. 벡터 스토어 = FAISS (로컬), pgvector 는 ablation 축
 - **결정:** FAISS(flat/IVF)로 시작. pgvector 는 "운영형 스토어" 비교 축으로 후순위.
@@ -52,12 +58,12 @@
 ## 평가 지표 (설계) — 상세는 [EVALUATION](EVALUATION.md)
 
 - **검색(retrieval):** Recall@k, MRR@k, nDCG@k, Hit@k — gold evidence 대비.
-- **답변(answer):** Faithfulness(근거 일치/환각 여부), Answer Correctness(reference 대비), Citation Accuracy(인용 문단이 주장 뒷받침하는지), Hallucination Rate. — LLM-as-judge.
+- **답변(answer):** Answer Correctness = **Qasper Answer-F1**(무료·표준). Faithfulness/Hallucination = **로컬 NLI**(evidence⊨answer, 무료). LLM-as-judge 는 이들과의 **상관 검증용 선택 지표**.
 - **회귀(CI):** 고정 eval셋 + 임계값, 변경마다 재실행·표 기록.
 
 ## Ablation 축 (예정)
 
-청킹(크기/overlap, fixed vs semantic) · 임베딩 모델 · 검색(dense vs hybrid BM25+dense) · 리랭커(none vs bge-reranker) · top-k · 프롬프트 변형.
+청킹(크기/overlap, fixed vs semantic) · 임베딩 모델 · 검색(dense vs hybrid BM25+dense) · 리랭커(none vs bge-reranker) · top-k · 프롬프트 변형 · **생성 모델(로컬 Qwen2.5-7B vs claude-sonnet-5 vs claude-opus-5)**.
 
 ## 주차별 로드맵
 
