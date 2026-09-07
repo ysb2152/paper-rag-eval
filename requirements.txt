@@ -1,0 +1,24 @@
+# --- Core RAG ---
+# 로컬 GPU 임베딩/리랭커 (RTX 3080). torch는 CUDA 빌드로 별도 설치 권장:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu121
+sentence-transformers>=3.0
+FlagEmbedding>=1.2          # bge-m3 / bge-reranker-v2-m3
+faiss-cpu>=1.8             # GPU 원하면 faiss-gpu (환경 맞으면)
+rank-bm25>=0.2             # hybrid 검색용 BM25
+
+# --- 생성 · 평가 (Claude) ---
+anthropic>=0.40
+
+# --- 데이터 ---
+datasets>=2.19            # Qasper 로드 (HF: allenai/qasper)
+pandas>=2.2
+numpy>=1.26
+
+# --- 서빙 (Week 4) ---
+fastapi>=0.110
+uvicorn>=0.29
+
+# --- 유틸 ---
+pyyaml>=6.0               # ablation config
+tqdm>=4.66
+python-dotenv>=1.0
