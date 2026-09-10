@@ -11,6 +11,12 @@ _이 README는 포트폴리오 어필용 개요다. 개발 일지는 [DEVELOPMEN
 - **채점은 전부 무료·재현 가능**(gold evidence + 표준 F1 + 로컬 NLI). Claude 는 하드 의존이 아니라 로컬 vs API 를 측정으로 비교하는 대상.
 - **스택:** 로컬 GPU 임베딩·리랭커·NLI·생성(bge-m3 / bge-reranker / Qwen2.5-7B, RTX 3080) + FAISS + (선택) Claude API + FastAPI.
 
+## 구현 범위 (계획)
+
+첫 버전은 **논문 하나를 선택하고 질문하는 QA**다. 선택한 논문 안에서 근거를 검색하고, 답변과 인용 원문을 함께 제공한다. 근거가 부족하면 답변을 보류한다. 검색·답변 평가 결과와 실패 사례를 재실행할 수 있는 상태까지 완성한다.
+
+이후 **관련 논문 검색 → 논문 선택 → 해당 논문에 질문**하는 흐름으로 확장한다. 여러 논문을 종합하는 답변은 별도 후속 후보로 둔다. 결정 근거와 완료 기준은 DEVELOPMENT_JOURNEY의 P0-7에 기록한다.
+
 ## 핵심 성과표
 
 _(수치 확보 후 채움 — 예: 베이스라인 대비 best config Recall@5, 환각률 개선 %)_
@@ -22,6 +28,15 @@ _(수치 확보 후 채움 — 예: 베이스라인 대비 best config Recall@5,
 | Hallucination rate | — | — | — |
 
 ## 데모
+
+현재는 단일 논문 JSON 로더와 BM25 문단 검색을 실행할 수 있다. GPU 패키지 없이 검색만 확인하려면 다음과 같이 설치한다. 입력 JSON은 Hugging Face Qasper의 논문 한 행을 저장한 형식이며 별도로 준비해야 한다.
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install rank-bm25==0.2.2 numpy==2.2.6
+.\.venv\Scripts\python.exe -m src.retrieve.bm25 data/qasper-train-first-paper.json "How big is seed lexicon used for training?" --top-k 5
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+```
 
 _(Week 4: GIF)_
 
