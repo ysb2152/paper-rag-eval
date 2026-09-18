@@ -6,6 +6,8 @@
 
 | 날짜(ISO) | 분류 | 내용 | 관련ID |
 |---|---|---|---|
+| 2026-09-18 | result | W2 답변 하네스 착수(51문항): Answer-F1 추출 베이스라인 0.137 → 7B 생성(oracle) 0.533 → 검색 근거 0.416, 검색 오류 손실 0.116 | B-8 |
+| 2026-09-18 | decision | 7B 양자화 = bitsandbytes 4-bit. AWQ는 autoawq가 torch 2.3.1 강제해 cu121 파손 → 폴백 | B-8 |
 | 2026-09-18 | result | 파이프라인 비교(10편 26문항·후보20): dense→리랭커 Hit@5 0.692 > dense 0.615 > BM25→리랭커 0.462, 1단계 검색 recall이 리랭커 천장 | B-7 |
 | 2026-09-18 | result | dense(bge-m3)·BM25·hybrid(RRF) 검색 비교(10편 26문항): Hit@5 dense 0.615 > hybrid 0.423 > BM25 0.385, 단순 RRF는 이득 없음 | B-6 |
 | 2026-09-18 | result | 리랭커(bge-reranker-v2-m3) 후보20 재정렬: 평균 Hit@5 0→0.25·Recall 0→0.25·MRR 0→0.125, 회복 가능 3개 중 1개 회복 | B-5 |
@@ -200,6 +202,20 @@ B-5의 리랭커는 1단계 검색기가 BM25였고, gold가 후보 20 밖(BM25 
 환경: torch 2.5.1+cu121, transformers 5.17.0, RTX 3080에서 bge-m3와 bge-reranker-v2-m3를 함께 로드해 추론. 원시 결과는 `runs/pipeline-10papers.json`에 저장하고 Git에서 제외한다. 지연시간·VRAM 사용량은 측정하지 않았다. 개발용 부분집합(26문항) 결과이며 held-out 최종 평가는 이후 단계다.
 
 원칙: 파이프라인은 1단계 검색(recall)과 2단계 리랭킹(precision)의 역할을 나눠 본다. 리랭킹을 얹기 전에 1단계 recall을 먼저 끌어올린다.
+
+## B-8. 답변 하네스 착수 — Answer-F1, 추출 베이스라인, 7B 생성, 검색 근거 손실
+
+W1이 "맞는 근거를 찾았나"라면 W2는 "그 근거로 만든 답이 정확한가"다. 정확도는 [Answer-F1 채점기](src/eval/answer.py)로 재며 Qasper 공식 evaluator 로직을 따른다(정규화: 소문자화·문장부호 제거·관사 제거·공백 정리, 토큰 F1, 주석자 여러 명이면 최대 F1). gold 문자열 우선순위는 unanswerable → extractive_spans → free_form → yes_no다. 단위 테스트 12개로 정규화·F1·유형별 문자열·최대 집계를 검증했다.
+
+검색 오류와 답 생성 오류를 섞지 않으려고 oracle(gold) 근거를 먼저 쓴다. [추출 베이스라인](scripts/answer_experiment.py)은 gold 근거 문단을 그대로 답으로 낸다. 10편 51문항에서 평균 Answer-F1 0.137이었다(extractive 0.166, abstractive 0.190, boolean·unanswerable 0). 완벽한 근거를 줘도 낮은 이유는 예측(문단 전체)이 정답 스팬보다 훨씬 길어 정밀도가 무너지기 때문이다. 즉 맞는 근거를 갖는 것과 정답을 쓰는 것은 다르며 답은 간결해야 한다.
+
+[생성기](src/generate/qwen.py)는 `Qwen2.5-7B-Instruct`를 bitsandbytes 4-bit(NF4)로 로드해(VRAM 5.56GB) 근거로만 간결히 답하고 없으면 보류하도록 지시하며, 재현을 위해 그리디로 디코딩한다. 양자화 방식은 처음에 사전양자화 AWQ(다운로드·VRAM 유리)를 쓰려 했으나, autoawq가 torch를 2.3.1로 강제 다운그레이드해 기존 cu121 CUDA 빌드를 깨뜨려(설치 dry-run으로 확인) bitsandbytes 4-bit로 폴백했다. oracle 근거로 생성한 Answer-F1은 0.506이었고(추출 0.137의 3.7배), 프롬프트를 손봐 0.533까지 올렸다. 이때 여러 지시를 한꺼번에 넣은 버전은 boolean을 크게 고쳤지만 다른 유형을 깎아 순증이 작았고, 효과가 확인된 yes/no 지시 하나만 남긴 버전이 최선이었다. 과도 보류(근거가 있는데 보류) 8건 중 약 3건은 답이 표(FLOAT 캡션)에만 있어 본문 근거로는 풀 수 없었다.
+
+마지막으로 oracle 근거를 [실제 검색 근거로 교체](scripts/answer_retrieved_experiment.py)했다(W1 최선인 dense 후보 20 → 리랭커 top-5, 검색기와 7B는 VRAM 제약으로 2단계 분리). 평균 Answer-F1은 0.533 → 0.416으로 검색 오류가 0.116을 깎았다. 손실 경로는 둘이다. 검색이 gold 문단을 top-5에 못 올리면 생성기가 좋아도 못 답하고(extractive 0.541→0.443), oracle에선 근거가 비어 정확히 보류하던 unanswerable이 검색은 답 없는 질문에도 top-5를 주는 탓에 노이즈를 보고 답을 지어낸다(1.000→0.500). 검색 품질이 답 품질의 천장이며, 이 0.116이 W1과 W2를 잇는다.
+
+환경: torch 2.5.1+cu121, transformers 5.17.0, accelerate, bitsandbytes 0.50.2, RTX 3080. Qwen2.5-7B는 HF 캐시로 받았다(~15GB). 원시 결과는 `runs/answer-*.json`에 저장하고 Git에서 제외한다. Faithfulness(로컬 NLI) 축과 held-out 최종 평가는 이후 단계다. 유형별 개수는 예측이 가장 잘 맞는 reference로 분류돼 실행마다 흔들리므로 전체 평균을 헤드라인으로 본다.
+
+원칙: 답 평가는 검색 오류와 생성 오류를 oracle로 분리해 각각 측정한다. 프롬프트는 변수를 하나씩 분리해 튜닝한다. 사전양자화 라이브러리는 torch 버전을 핀으로 걸 수 있어 설치 전 dry-run으로 의존성 변경을 확인한다.
 
 ---
 

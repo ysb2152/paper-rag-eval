@@ -196,6 +196,37 @@ B-3와 동일한 논문·4개 질문·본문 문단·BM25 설정·평가 정책�
 
 _(로컬 NLI 모델 선정·faithfulness 근사 정확도, LLM-judge 프롬프트·자기일관성 방침, 인간 검증 서브셋 상관은 착수 시 기록.)_
 
+### B-8. Answer-F1: 추출 베이스라인 · 7B 생성 · 검색 근거 (2026-09-18)
+
+- 대상: 10편의 전체 질문 51개(보류 필터 없이 채점). 개발용 부분집합이며 held-out 최종 평가가 아니다.
+- 채점: Qasper 공식 Answer-F1(정규화 후 토큰 F1, 주석자 최대). 유형별 개수는 예측이 가장 잘 맞는 reference로 분류돼 실행마다 흔들리므로 전체 평균을 헤드라인으로 본다.
+- 근거 조건: oracle = gold evidence, 검색 = dense 후보 20 → 리랭커 top-5.
+- 생성: `Qwen2.5-7B-Instruct` bitsandbytes 4-bit(NF4), 그리디, max_new_tokens 64, 프롬프트 v3(간결·yes/no·근거 없으면 Unanswerable). 환경 torch 2.5.1+cu121, RTX 3080.
+
+| 방식(근거) | 전체 Answer-F1 |
+|---|---|
+| 추출 베이스라인(oracle) | 0.137 |
+| 7B 생성(oracle) | 0.506 |
+| 7B 생성 + 프롬프트 v3(oracle) | **0.533** |
+| 7B 생성 v3(검색 근거) | 0.416 |
+
+| 유형(v3) | 추출(oracle) | 생성(oracle) | 생성(검색) |
+|---|---|---|---|
+| extractive | 0.166 | 0.541 | 0.443 |
+| abstractive | 0.190 | 0.351 | 0.363 |
+| boolean | 0.000 | 0.400 | 0.250 |
+| unanswerable | 0.000 | 1.000 | 0.500 |
+
+- 추출은 완벽한 근거로도 0.137로 낮다. 예측(문단 전체)이 정답 스팬보다 길어 정밀도가 무너진다. 생성이 간결히 답해 0.533으로 3.9배.
+- 검색 근거로 바꾸면 0.533→0.416(−0.116). 검색이 gold를 top-5에 못 올리면 답할 수 없고(extractive 하락), unanswerable은 검색이 노이즈 top-5를 줘 보류가 깨진다(1.000→0.500). 검색 품질이 답 품질의 천장이다.
+- 프롬프트는 yes/no 지시 하나만 더한 v3가 최선이었다(여러 지시를 섞으면 이득·손해 상쇄). 7B 양자화는 AWQ가 torch를 다운그레이드해 bitsandbytes 4-bit로 폴백. 상세는 [DEVELOPMENT_JOURNEY B-8](DEVELOPMENT_JOURNEY.md).
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.answer_experiment data/papers/*.json --out runs/answer-oracle-extractive.json
+.\.venv\Scripts\python.exe -m scripts.generate_experiment data/papers/*.json --out runs/answer-oracle-qwen.json
+.\.venv\Scripts\python.exe -m scripts.answer_retrieved_experiment data/papers/*.json --out runs/answer-retrieved-qwen.json
+```
+
 ## Ablation
 
 | 축 | 후보 |

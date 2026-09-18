@@ -29,7 +29,7 @@ _(수치 확보 후 채움 — 예: 베이스라인 대비 best config Recall@5,
 
 ## 데모
 
-현재는 단일 논문 JSON 로더, BM25 문단 검색, 명확한 본문 근거가 있는 질문의 검색 평가를 실행할 수 있다. GPU 패키지 없이 확인하려면 다음과 같이 설치한다. 입력 JSON은 Hugging Face Qasper의 논문 한 행을 저장한 형식이며 별도로 준비해야 한다. 로컬 GPU로는 dense(bge-m3)·리랭커(bge-reranker) 검색과 BM25·dense·hybrid(RRF) 비교도 실행하며, 10편 26문항 결과는 [EVALUATION의 B-6](EVALUATION.md)에 기록한다.
+현재는 단일 논문 JSON 로더, BM25 문단 검색, 명확한 본문 근거가 있는 질문의 검색 평가를 실행할 수 있다. GPU 패키지 없이 확인하려면 다음과 같이 설치한다. 입력 JSON은 Hugging Face Qasper의 논문 한 행을 저장한 형식이며 별도로 준비해야 한다. 로컬 GPU로는 dense(bge-m3)·리랭커(bge-reranker) 검색과 BM25·dense·hybrid(RRF) 비교도 실행하며, 10편 26문항 결과는 [EVALUATION의 B-6](EVALUATION.md)에 기록한다. 또한 Qwen2.5-7B로 근거에서 답을 생성해 Answer-F1로 채점하고(oracle 근거 대비 검색 근거의 손실 측정), 결과는 [EVALUATION의 B-8](EVALUATION.md)에 기록한다.
 
 ```powershell
 python -m venv .venv
