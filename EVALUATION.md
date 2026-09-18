@@ -139,6 +139,29 @@ B-3와 동일한 논문·4개 질문·본문 문단·BM25 설정·평가 정책�
 .\.venv\Scripts\python.exe -m scripts.rerank_experiment data/qasper-train-first-paper.json --candidate-k 20 --top-k 5 --out runs/rerank-first-paper-k20.json
 ```
 
+### B-6. BM25 · dense(bge-m3) · hybrid(RRF) 비교 (2026-09-18)
+
+- 대상: Qasper train 앞 10편에서 보류 규칙(B-3)을 통과한 평가 질문 26개. 체리피킹 없이 원본 등장 순서대로 추출. 개발용 부분집합이며 held-out 최종 평가가 아니다.
+- 방법: 세 방식 모두 논문의 전체 문단을 순위 매기고 top-5로 Hit/Recall/MRR을 집계(마이크로 평균, 질문 26개 균등 가중). dense는 `BAAI/bge-m3`의 CLS 벡터를 L2 정규화해 코사인 유사도로 정렬. hybrid는 BM25·dense 순위를 RRF(1/(k+순위) 합, k=60)로 융합.
+- 환경: Windows, Python 3.10.7, torch 2.5.1+cu121, transformers 5.17.0, RTX 3080 GPU 추론. max_length 512. 지연시간 미측정.
+
+| 평균 지표 (26문항) | BM25 | dense | hybrid |
+|---|---|---|---|
+| Hit@5 | 0.385 | **0.615** | 0.423 |
+| Recall@5 | 0.346 | **0.558** | 0.404 |
+| MRR@5 | 0.237 | **0.404** | 0.304 |
+| Hit 개수(26중) | 10 | 16 | 11 |
+
+- dense가 세 지표 모두 최선이고, 단순 RRF hybrid는 BM25와 dense 사이에 머물러 dense를 넘지 못한다. BM25가 dense보다 약해 동등 가중 융합이 강한 신호를 희석하기 때문이다.
+- 표본 크기 주의: 같은 실험을 첫 논문 1편(평가 4문항)만으로 하면 BM25 Hit@5 0, dense 0.5, hybrid 0.25로, 그 논문이 BM25에 유난히 불리해 오해를 준다. 26문항으로 늘리자 BM25가 0.385로 올라왔다. 단일 논문 수치는 결론으로 삼지 않는다.
+- 10편·26문항도 Qasper 전체 대표 성능은 아니며, held-out 최종 평가는 이후 단계다.
+
+```powershell
+# Qasper 원본을 data/qasper-raw/ 에 두고 10편 추출 후 실행
+.\.venv\Scripts\python.exe -m scripts.extract_papers --count 10
+.\.venv\Scripts\python.exe -m scripts.hybrid_experiment data/papers/*.json --top-k 5 --out runs/hybrid-10papers.json
+```
+
 ## 답변 평가 (Answer)
 
 기본 채점은 **무료·재현 가능**(표준지표 + 로컬 모델). LLM-judge 는 이들과의 상관을 보는 **선택적 검증 지표**.
