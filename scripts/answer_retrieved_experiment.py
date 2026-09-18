@@ -61,8 +61,10 @@ def run(paths: list[str], candidate_k: int = 20, evidence_k: int = 5,
             "paper_id": paper_id,
             "question_id": question.id,
             "question": question.text,
+            "evidence": evidence,
             "prediction": prediction,
             "matched_type": matched_type,
+            "has_evidence": bool(evidence),
             "f1": f1,
         })
 

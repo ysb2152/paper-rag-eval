@@ -29,6 +29,7 @@ def run(paths: list[str], max_new_tokens: int = 64) -> dict:
                 "paper_id": paper.id,
                 "question_id": question.id,
                 "question": question.text,
+                "evidence": evidence,
                 "prediction": prediction,
                 "matched_type": matched_type,
                 "has_evidence": bool(evidence),
