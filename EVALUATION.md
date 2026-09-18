@@ -227,6 +227,25 @@ _(로컬 NLI 모델 선정·faithfulness 근사 정확도, LLM-judge 프롬프�
 .\.venv\Scripts\python.exe -m scripts.answer_retrieved_experiment data/papers/*.json --out runs/answer-retrieved-qwen.json
 ```
 
+### B-9. Faithfulness(NLI 충실성·환각율) (2026-09-18)
+
+- 대상: B-8과 같은 51문항의 생성 답(oracle 근거 vs 검색 근거). Answer-F1과 독립된 축.
+- 채점: `MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli`로 근거를 전제, 답을 가설로 두고 함의 판정. entailment=충실, neutral/contradiction=환각. 보류(Unanswerable)는 주장을 안 한 것이라 제외. 라벨은 config.id2label로 읽는다.
+
+| 근거 조건 | 채점된 답 | 보류 제외 | 충실율(entail) | 환각율 | 모순율 |
+|---|---|---|---|---|---|
+| oracle | 36 | 15 | **0.778** | 0.222 | 0.056 |
+| 검색(dense→리랭커 top-5) | 39 | 12 | 0.615 | **0.385** | 0.103 |
+
+- 검색 노이즈는 정확도(Answer-F1 0.533→0.416, B-8)뿐 아니라 충실성(0.778→0.615, 환각 0.222→0.385)도 깎는다. 검색이 무관한 문단을 주면 모델이 근거에 없는 말을 답에 넣어 함의가 깨진다.
+- oracle도 환각 0.222로 완전하지 않다(사전지식 혼입·서술형/수치 답에 대한 NLI 한계·재구성 표현). NLI는 근사 렌즈이므로 절대값보다 oracle 대비 검색의 상대 격차를 신뢰 신호로 본다.
+- 정확도(F1)와 충실성(NLI)은 직교하는 두 축이라 함께 봐야 "근거 없이 맞힘"과 "근거대로인데 표현 달라 손해"를 구분한다.
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.nli_experiment runs/answer-oracle-qwen-v3.json --out runs/nli-oracle-qwen-v3.json
+.\.venv\Scripts\python.exe -m scripts.nli_experiment runs/answer-retrieved-qwen.json --out runs/nli-retrieved-qwen.json
+```
+
 ## Ablation
 
 | 축 | 후보 |
