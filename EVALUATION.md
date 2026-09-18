@@ -113,6 +113,32 @@ B-3와 동일한 논문·4개 질문·본문 문단·BM25 설정·평가 정책�
 .\.venv\Scripts\python.exe -m src.eval.retrieval data/qasper-train-first-paper.json --top-k 10
 ```
 
+### B-5. BM25 후보 20개 재정렬 (리랭커) 비교 (2026-09-18)
+
+- 대상: B-3와 같은 논문 `1909.00694`의 평가 4개 질문. 개발용 부분집합이며 held-out 최종 평가가 아니다.
+- 방법: 각 질문에서 BM25 상위 20개를 후보로 고정하고, ⓐ 기존 BM25 순서 top-5와 ⓑ 리랭킹 후 top-5를 같은 후보에서 비교. 정답 근거는 리랭커 입력에서 제외.
+- 모델: `BAAI/bge-reranker-v2-m3` 교차 인코더. (질문, 문단) 관련도 logit 내림차순, 동점은 BM25 순서 유지. max_length 512, batch 8.
+- 환경: Windows, Python 3.10.7, torch 2.5.1+cu121, transformers 5.17.0, RTX 3080 GPU 추론. 지연시간 미측정. 후보 20개 중 잘린 것 0개.
+
+| 질문 요약 | gold(접두사 생략) | BM25 후보 순위 | 기존 top-5 Hit | 리랭킹 top-5 Hit | 리랭킹 후 gold 순위(20중) |
+|---|---|---|---|---|---|
+| 감독 학습 라벨 | s0:p0 | 9 | 0 | 0 | 14 |
+| 원시 데이터 학습 방법 | s0:p2 | 30 | 0 | 0 | 후보 밖 |
+| seed lexicon 크기 | s11:p4 | 11 | 0 | 1 | 2 |
+| 원시 말뭉치 크기 | s11:p0, s11:p4 | 6, 20 | 0 | 0 | 6, 7 |
+
+| 평균 지표 (4개) | BM25 top-5 | 리랭킹 top-5 |
+|---|---|---|
+| Hit@5 | 0 | 0.25 |
+| Recall@5 | 0 | 0.25 |
+| MRR@5 | 0 | 0.125 |
+
+리랭킹이 회복한 1개는 seed lexicon 질문(BM25 11위 → 리랭킹 2위)이다. 감독 학습 라벨(hard miss, gold 14위)·원시 말뭉치(near miss, gold 6·7위)는 후보 안에 있었지만 top-5에 못 들었고, 원시 데이터 학습 질문은 gold가 후보 20 밖(BM25 30위)이라 리랭킹으로 회복 불가다. 기준값이 0이라 상대 개선율은 산출하지 않는다. 단일 논문·4문항 개발용 결과로 전체 Qasper 대표 성능이 아니다.
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.rerank_experiment data/qasper-train-first-paper.json --candidate-k 20 --top-k 5 --out runs/rerank-first-paper-k20.json
+```
+
 ## 답변 평가 (Answer)
 
 기본 채점은 **무료·재현 가능**(표준지표 + 로컬 모델). LLM-judge 는 이들과의 상관을 보는 **선택적 검증 지표**.
