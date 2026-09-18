@@ -30,3 +30,6 @@ env/
 Thumbs.db
 .vscode/
 .idea/
+
+# Local learning notes (not for publication)
+/local-notes/

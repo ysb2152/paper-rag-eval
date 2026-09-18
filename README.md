@@ -29,14 +29,17 @@ _(수치 확보 후 채움 — 예: 베이스라인 대비 best config Recall@5,
 
 ## 데모
 
-현재는 단일 논문 JSON 로더와 BM25 문단 검색을 실행할 수 있다. GPU 패키지 없이 검색만 확인하려면 다음과 같이 설치한다. 입력 JSON은 Hugging Face Qasper의 논문 한 행을 저장한 형식이며 별도로 준비해야 한다.
+현재는 단일 논문 JSON 로더, BM25 문단 검색, 명확한 본문 근거가 있는 질문의 검색 평가를 실행할 수 있다. GPU 패키지 없이 확인하려면 다음과 같이 설치한다. 입력 JSON은 Hugging Face Qasper의 논문 한 행을 저장한 형식이며 별도로 준비해야 한다.
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install rank-bm25==0.2.2 numpy==2.2.6
 .\.venv\Scripts\python.exe -m src.retrieve.bm25 data/qasper-train-first-paper.json "How big is seed lexicon used for training?" --top-k 5
+.\.venv\Scripts\python.exe -m src.eval.retrieval data/qasper-train-first-paper.json --top-k 5
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
+
+평가 명령은 질문별 검색 ID·점수·Hit·Recall·RR, 질문 평균, 보류 사유를 JSON으로 출력한다. 첫 샘플에서는 9개 중 4개를 평가하고 5개를 보류한다. 전체 벤치마크 성능이 아닌 개발용 실행 결과이며, 포함 조건과 수치는 [EVALUATION의 B-3](EVALUATION.md#b-3-bm25-4개-질문-평가-2026-09-18)에 기록한다.
 
 _(Week 4: GIF)_
 
