@@ -162,6 +162,27 @@ B-3와 동일한 논문·4개 질문·본문 문단·BM25 설정·평가 정책�
 .\.venv\Scripts\python.exe -m scripts.hybrid_experiment data/papers/*.json --top-k 5 --out runs/hybrid-10papers.json
 ```
 
+### B-7. 1단계 검색기별 리랭킹 파이프라인 비교 (2026-09-18)
+
+- 대상: B-6과 같은 10편 26문항. 개발용 부분집합이며 held-out 최종 평가가 아니다.
+- 방법: 세 방식의 top-5를 마이크로 평균 비교. ⓐ dense 단독, ⓑ BM25 후보 20 → 리랭킹, ⓒ dense 후보 20 → 리랭킹. 정답 근거는 리랭커 입력에서 제외.
+- 모델: 검색 `BAAI/bge-m3`, 리랭커 `BAAI/bge-reranker-v2-m3`를 함께 로드. candidate_k 20, max_length 512.
+- 환경: Windows, Python 3.10.7, torch 2.5.1+cu121, transformers 5.17.0, RTX 3080 GPU 추론. 지연시간·VRAM 미측정.
+
+| 평균 지표 (26문항) | dense 단독 | BM25→리랭커 | dense→리랭커 |
+|---|---|---|---|
+| Hit@5 | 0.615 | 0.462 | **0.692** |
+| Recall@5 | 0.558 | 0.404 | **0.577** |
+| MRR@5 | 0.404 | 0.335 | **0.461** |
+
+- dense→리랭커가 전 지표 최선으로, 리랭킹이 dense 위에서 추가 이득을 낸다(Hit 0.615→0.692).
+- BM25→리랭커(0.462)는 dense 단독(0.615)보다도 낮다. 같은 리랭커라도 후보가 약하면 좋은 후보(dense)의 무리랭킹보다 못하다. 후보만 dense로 바꾸면 0.462→0.692.
+- 해석: 리랭커는 후보 집합 안에서만 재정렬하므로 gold가 후보 밖이면 회복 불가. 1단계 검색 recall이 리랭커 성능의 천장이다. W1 전체 그림은 BM25 0.385(B-6) → dense 0.615 → dense→리랭커 0.692.
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.pipeline_experiment data/papers/*.json --candidate-k 20 --top-k 5 --out runs/pipeline-10papers.json
+```
+
 ## 답변 평가 (Answer)
 
 기본 채점은 **무료·재현 가능**(표준지표 + 로컬 모델). LLM-judge 는 이들과의 상관을 보는 **선택적 검증 지표**.
