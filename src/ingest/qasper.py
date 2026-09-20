@@ -1,5 +1,5 @@
-"""Hugging Face 형식으로 저장한 Qasper 논문 한 편을 읽는다."""
-
+"""Hugging Face 형식으로 저장한 Qasper 논문 한 편을 읽는다"""
+from __future__ import annotations
 import argparse
 import json
 from dataclasses import dataclass
@@ -13,6 +13,22 @@ class Paragraph:
     section_index: int
     paragraph_index: int
     text: str
+
+
+@dataclass
+class Paper:
+    id: str
+    title: str
+    abstract: str
+    paragraphs: list[Paragraph]
+    questions: list[Question]
+
+
+@dataclass
+class Question:
+    id: str
+    text: str
+    answers: list[Answer]
 
 
 @dataclass
@@ -30,70 +46,52 @@ class Answer:
     evidence: list[Evidence]
 
 
-@dataclass
-class Question:
-    id: str
-    text: str
-    answers: list[Answer]
-
-
-@dataclass
-class Paper:
-    id: str
-    title: str
-    abstract: str
-    paragraphs: list[Paragraph]
-    questions: list[Question]
-
-
 def load_paper(path: str | Path) -> Paper:
-    # Windows에서 저장한 JSON에 BOM이 있어도 같은 방식으로 읽는다.
-    with Path(path).open(encoding="utf-8-sig") as source:
-        data = json.load(source)
+    with open(path, encoding="utf-8-sig") as f:
+        data = json.load(f)
 
-    paragraphs = []
-    paragraph_ids_by_text: dict[str, list[str]] = {}
-    sections = zip(
-        data["full_text"]["section_name"],
-        data["full_text"]["paragraphs"],
-        strict=True,
-    )
-    for section_index, (section, texts) in enumerate(sections):
+    paragraphs_list = []
+    section_names = data["full_text"]["section_name"]
+    section_texts = data["full_text"]["paragraphs"]
+    id_by_text = {}
+
+    for section_index, (section, texts) in enumerate(
+        zip(section_names, section_texts, strict=True)
+    ):
         for paragraph_index, text in enumerate(texts):
             paragraph_id = f"{data['id']}:s{section_index}:p{paragraph_index}"
-            paragraphs.append(
+            paragraphs_list.append(
                 Paragraph(paragraph_id, section, section_index, paragraph_index, text)
             )
-            paragraph_ids_by_text.setdefault(text, []).append(paragraph_id)
+            id_by_text.setdefault(text, []).append(paragraph_id)
 
-    questions = []
-    rows = zip(
-        data["qas"]["question_id"],
-        data["qas"]["question"],
-        data["qas"]["answers"],
-        strict=True,
-    )
-    for question_id, text, annotations in rows:
-        answers = []
-        for annotation in annotations["answer"]:
-            # 같은 문단이 여러 위치에 있으면 후보를 모두 남긴다. 표·그림이나
-            # 본문과 일치하지 않는 근거도 버리지 않고 빈 위치 목록으로 보존한다.
-            evidence = [
-                Evidence(item, list(paragraph_ids_by_text.get(item, [])))
-                for item in annotation["evidence"]
-            ]
-            answers.append(
+    questions_list = []
+    question_id = data["qas"]["question_id"]
+    question_text = data["qas"]["question"]
+    question_answers = data["qas"]["answers"]
+
+    for qid, q_text, q_ans in zip(
+        question_id, question_text, question_answers, strict=True
+    ):
+        answer_list = []
+        for i in q_ans["answer"]:
+            evidence_list = []
+            for text in i["evidence"]:
+                evidence_list.append(Evidence(text, id_by_text.get(text, [])))
+            answer_list.append(
                 Answer(
-                    unanswerable=annotation["unanswerable"],
-                    extractive_spans=annotation["extractive_spans"],
-                    free_form_answer=annotation["free_form_answer"],
-                    yes_no=annotation["yes_no"],
-                    evidence=evidence,
+                    i["unanswerable"],
+                    i["extractive_spans"],
+                    i["free_form_answer"],
+                    i["yes_no"],
+                    evidence_list,
                 )
             )
-        questions.append(Question(question_id, text, answers))
+        questions_list.append(Question(qid, q_text, answer_list))
 
-    return Paper(data["id"], data["title"], data["abstract"], paragraphs, questions)
+    return Paper(
+        data["id"], data["title"], data["abstract"], paragraphs_list, questions_list
+    )
 
 
 def main() -> None:
