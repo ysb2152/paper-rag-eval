@@ -1,101 +1,102 @@
-"""정답 근거가 명확히 연결된 질문으로 단일 논문의 BM25 검색을 평가한다."""
-
 import argparse
 import json
 
 from src.ingest.qasper import Paper, load_paper
 from src.retrieve.bm25 import search_bm25
 
+def score_retrieval(retrieved_ids, gold_ids, top_k) -> dict:
 
-def score_retrieval(retrieved_ids: list[str], gold_ids: set[str], top_k: int) -> dict:
-    if top_k < 1:
-        raise ValueError("top_k는 1 이상이어야 합니다.")
+    if top_k<1:
+        raise ValueError(" top_k 는 1 이상이어야 함")
     if not gold_ids:
-        raise ValueError("채점할 정답 근거가 필요합니다.")
+        raise ValueError(" gold_ids is empty")
 
-    selected = retrieved_ids[:top_k]
-    matched = gold_ids.intersection(selected)
-    first_rank = next(
-        (rank for rank, paragraph_id in enumerate(selected, start=1)
-         if paragraph_id in gold_ids),
-        None,
-    )
-    return {
-        "hit": int(bool(matched)),
-        "recall": len(matched) / len(gold_ids),
-        "rr": 1 / first_rank if first_rank is not None else 0.0,
-        "first_gold_rank": first_rank,
-    }
+    selected=retrieved_ids[:top_k]
 
+    # 중복 있어도 recall 부풀지 않도록
 
-def deferral_reasons(question) -> list[str]:
-    """정답 근거가 하나로 명확히 연결되지 않아 채점에서 보류할 이유를 모은다."""
-    reasons = []
-    if len(question.answers) != 1:
-        reasons.append("answer_count_not_one")
-    if any(answer.unanswerable for answer in question.answers):
-        reasons.append("unanswerable")
-    if any(not answer.evidence for answer in question.answers):
-        reasons.append("no_evidence")
-    evidence = [item for answer in question.answers for item in answer.evidence]
-    if any(not item.paragraph_ids for item in evidence):
-        reasons.append("unmapped_evidence")
-    if any(len(item.paragraph_ids) > 1 for item in evidence):
-        reasons.append("ambiguous_evidence")
-    return reasons
+    matched=gold_ids.intersection(selected)
+    #first_rank 초기화
+    first_rank= None
+    for rank,paragraph_id in enumerate(selected, start=1):
+        if paragraph_id in gold_ids:
+            first_rank=rank
+            break
 
+    return {"hit": int(bool(matched)),
+            "recall": len(matched)/len(gold_ids),
+            "rr": 1/first_rank if first_rank is not None else 0.0,
+            "first_gold_rank": first_rank
+            }
 
 def gold_paragraph_ids(question) -> set[str]:
-    """보류 사유가 없는 질문에서 각 근거가 가리키는 본문 문단 ID를 모은다."""
-    evidence = [item for answer in question.answers for item in answer.evidence]
+    evidence=[item for answer in question.answers for item in answer.evidence]
+
+
     return {item.paragraph_ids[0] for item in evidence}
 
+def deferral_reasons(question) -> list[str]:
+    reasons=[]
+    # 답이 정확히 1개가 아닌 경우
 
-def evaluate_paper(paper: Paper, top_k: int = 5) -> dict:
-    if top_k < 1:
-        raise ValueError("top_k는 1 이상이어야 합니다.")
+    if  len(question.answers)!=1:
+        reasons.append("answer_count_not_one")
+    # 답이 unanswerable 하나라도 있을 경우
 
-    evaluated = []
-    deferred = []
+    if any(answer.unanswerable for answer in question.answers):
+        reasons.append("unanswerable")
+    # 답에 하나라도 근거없을 경우
+
+    if any(not answer.evidence for answer in question.answers):
+        reasons.append("no_evidence")
+
+    evidence=[item for answer in question.answers for item in answer.evidence]
+
+    # 근거중 하나라도 매핑 비었을 경우
+    if any(not item.paragraph_ids for item in evidence):
+        reasons.append("unmapped_evidence")
+
+    # 근거중 하나라도 매핑 2개 이상
+    if any(len(item.paragraph_ids)>1 for item in evidence):
+        reasons.append("ambiguous_evidence")
+
+    return reasons
+
+def evaluate_paper(paper: Paper,top_k=5)->dict:
+
+    if top_k<1:
+        raise ValueError("top_k 1보다 작음.")
+
+    scored_q=[]
+    amb_q=[]
     for question in paper.questions:
-        reasons = deferral_reasons(question)
-        if reasons:
-            deferred.append({
-                "question_id": question.id,
-                "question": question.text,
-                "reasons": reasons,
-            })
+        deferral = deferral_reasons(question)
+        if deferral:
+            amb_q.append({"question_id":question.id,"question":question.text,"reasons":deferral})
             continue
+        result=search_bm25(paper.paragraphs,question.text,top_k)
+        gold=gold_paragraph_ids(question)
+        retrived_ids=[r.paragraph.id for r in result ]
+        score=score_retrieval(retrived_ids,gold,top_k)
+        scores=[s.score for s in result]
+        scored_q.append({"question_id":question.id,"question":question.text,"gold_ids":sorted(gold),"retrieved_ids":retrived_ids,"scores":scores,**score})
 
-        # 연결된 근거만 남겨 분모를 줄이지 않고, 모든 근거가 명확한 질문만 채점한다.
-        gold_ids = gold_paragraph_ids(question)
-        results = search_bm25(paper.paragraphs, question.text, top_k)
-        retrieved_ids = [result.paragraph.id for result in results]
-        evaluated.append({
-            "question_id": question.id,
-            "question": question.text,
-            "gold_ids": sorted(gold_ids),
-            "retrieved_ids": retrieved_ids,
-            "scores": [result.score for result in results],
-            **score_retrieval(retrieved_ids, gold_ids, top_k),
-        })
+    count=len(scored_q)
 
-    count = len(evaluated)
-    return {
-        "paper_id": paper.id,
-        "top_k": top_k,
-        "total_questions": len(paper.questions),
-        "evaluated_questions": count,
-        "deferred_questions": len(deferred),
-        "mean": {
-            "hit": sum(row["hit"] for row in evaluated) / count if count else None,
-            "recall": sum(row["recall"] for row in evaluated) / count if count else None,
-            "mrr": sum(row["rr"] for row in evaluated) / count if count else None,
-        },
-        "evaluated": evaluated,
-        "deferred": deferred,
-    }
+    hit_total=sum(row["hit"] for row in scored_q)
+    recall_total = sum(row["recall"] for row in scored_q)
+    mrr_total = sum(row["rr"] for row in scored_q)
 
+    mean={"hit":hit_total/count if count else None,"recall":recall_total/count if count else None,"mrr":mrr_total/count if count else None}
+
+    return {"paper_id": paper.id,
+            "top_k": top_k,
+            "total_questions": len(paper.questions),
+            "evaluated_questions": count,
+            "deferred_questions": len(amb_q),
+            "mean": mean,
+            "evaluated": scored_q,
+            "deferred": amb_q}
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
