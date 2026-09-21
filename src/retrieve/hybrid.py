@@ -8,16 +8,19 @@ Fusion)는 원점수를 버리고 각 방식이 매긴 순위만 써서 문단�
 """
 
 
-def reciprocal_rank_fusion(rankings: list[list[str]], k: int = 60) -> list[tuple[str, float]]:
-    """여러 순위 목록(문단 ID의 정렬된 리스트)을 RRF 점수로 합쳐 내림차순 정렬한다.
-
-    같은 점수면 먼저 등장한 문단을 앞에 두어 재실행 시 순서가 흔들리지 않게 한다.
-    """
-    scores: dict[str, float] = {}
-    order: dict[str, int] = {}
+def reciprocal_rank_fusion(rankings: list, k: int=60):
+    scores,order={},{}
     for ranking in rankings:
-        for rank, paragraph_id in enumerate(ranking, start=1):
-            scores[paragraph_id] = scores.get(paragraph_id, 0.0) + 1.0 / (k + rank)
+
+        # RRF= 1/k+rank 이므로 rank starts at 1.
+
+        for rank,paragraph_id in enumerate(ranking, start=1):
+
+            if paragraph_id not in scores: scores[paragraph_id]=0.0
+            scores[paragraph_id]+=1.0/(k+rank)
+
+            # 처음 볼 경우만 넣기 아니면 현상유지
+
             order.setdefault(paragraph_id, len(order))
 
-    return sorted(scores.items(), key=lambda item: (-item[1], order[item[0]]))
+    return sorted(scores.items(), key=lambda item: (-item[1],order[item[0]]))
