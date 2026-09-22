@@ -1,0 +1,29 @@
+name: CI
+
+# CPU 티어만 자동으로 돈다. dense·리랭커·7B·NLI는 GPU가 필요해
+# GitHub Actions(무GPU)에서 못 돌리므로 로컬에서 수동으로 확인한다.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  cpu-tier:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      # CPU 경로가 쓰는 외부 라이브러리는 rank-bm25 하나뿐(나머지는 표준 라이브러리).
+      - name: Install CPU-tier deps
+        run: pip install rank-bm25==0.2.2
+
+      - name: Unit tests
+        run: python -m unittest discover -s tests
+
+      # 골든(baselines/retrieval.json)과 비교해 하락 시 exit 1로 실패시킨다.
+      - name: Regression (bm25 vs golden)
+        run: python -m scripts.regression_runner
