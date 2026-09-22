@@ -1,5 +1,6 @@
 # Data & artifacts
-/data/
+/data/*
+!/data/papers/
 *.faiss
 *.index
 *.pkl
