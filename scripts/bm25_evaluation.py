@@ -31,7 +31,8 @@ def compute_bm25_metrics():
     n_questions=len(evaluated_paper)
     #hit,recall,mrr은 딕셔너리로, n_questions는 분리하여 제공
     return_dict={"hit@5":all_hit/n_questions,"recall":all_recall/n_questions,"mrr":all_mrr/n_questions}
+    changed_dict=dict()
+    changed_dict["bm25"]=return_dict
 
-
-    return (return_dict,n_questions)
+    return (changed_dict,n_questions)
     

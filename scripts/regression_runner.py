@@ -4,6 +4,9 @@ import argparse
 from pathlib import Path
 from scripts.bm25_evaluation import compute_bm25_metrics
 from src.eval.regression import find_regression_list
+from scripts.pipeline_evaluation import compute_pipeline_metrics
+
+tier_registry={"cpu":compute_bm25_metrics , "gpu":compute_pipeline_metrics}
 
 
 def read_helper(golden_path):
@@ -37,52 +40,78 @@ def report_regressions(regressions):
         print(f"{row['config']} {row['metric']} {row['baseline']} -> {row['current']} , {row['drop']}")
     sys.exit(1)
 
-def run_to_compare(golden_path):
+def run_to_compare(golden_path,tier_list):
 
     golden=read_helper(golden_path)
-
+    all_regressions=[]
     # 골든이 존재하지 않을 경우
     if golden == None:
 
         print(" go --update-baseline ")
+
         sys.exit(1)
 
-    tuples=compute_bm25_metrics()
+    for tier in tier_list:
 
-    metrics=tuples[0]
+        configs,n=tier_registry[tier]()
 
-    # n_questions 변화할 경우
-    if golden["n_questions"]!=tuples[1]:
+        if golden["n_questions"] != n:
+            print('fixture 크기 바뀜')
+            sys.exit(1)
 
-        print('fixture 크기 바뀜')
-        sys.exit(1)
+        for config_name in configs:
 
-    golden_bm25=golden["configs"]["bm25"]
+            if config_name not in golden["configs"]:
 
-    regressions=find_regression_list("bm25",golden_bm25,metrics,0.01)
+                print("go --update-baseline")
 
-    report_regressions(regressions)
+                sys.exit(1)
 
-def run_to_update(golden_path):
+            all_regressions.extend(find_regression_list(config_name,golden["configs"][config_name],configs[config_name],0.01))
 
-    tuples=compute_bm25_metrics()
+    report_regressions(all_regressions)
 
-    golden_shape={"n_questions":tuples[1],"configs":{"bm25":tuples[0]}}
+def run_to_update(golden_path,tier_list):
 
-    write_helper(golden_path,golden_shape)
+    golden = read_helper(golden_path)
 
-    print(f"갱신됨  {golden_shape}")
+
+    # 골든이 존재하지 않을 경우
+
+    if golden == None:
+
+        golden={"configs":{}}
+
+    for tier in tier_list:
+
+        configs, n = tier_registry[tier]()
+
+        golden["n_questions"]=n
+
+        golden["configs"].update(configs)
+
+    write_helper(golden_path,golden)
+
+    print(f"갱신됨 ")
 
 def main() -> None:
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--update-baseline", action="store_true")
     parser.add_argument("--golden", type=Path, default=Path("baselines/retrieval.json"))
+    parser.add_argument("--tier",type=str,choices=["cpu","gpu","all"],default="cpu")
+
     args = parser.parse_args()
-    if args.update_baseline:
-        run_to_update(args.golden)
+
+    if args.tier=="all":
+        tier_list=["cpu","gpu"]
     else:
-        run_to_compare(args.golden)
+        tier_list=[args.tier]
+
+    if args.update_baseline:
+        run_to_update(args.golden,tier_list)
+    else:
+        run_to_compare(args.golden,tier_list)
 
 
 if __name__ == "__main__":
