@@ -6,6 +6,8 @@
 
 | 날짜(ISO) | 분류 | 내용 | 관련ID |
 |---|---|---|---|
+| 2026-10-13 | feat | W3 회귀 하네스 완성 — GPU 티어(dense·dense_rerank) 러너 추가·`--tier` 선택·골든 병합, ablation 표 생성기. `--tier all` 3 config 통과, dense Hit@5 0.615·dense_rerank 0.692(B-6·B-7 일치) | B-12 |
+| 2026-09-23 | feat | GitHub Actions CPU 티어 배선 — push/PR에 unittest + bm25 골든 비교, 첫 실행 초록(B-11 직후, 기록 누락분) | B-11 |
 | 2026-09-23 | feat | 회귀 하네스 러너(bm25 CPU 티어): fixture 26문항 마이크로 Hit@5 0.385 재현(B-6과 일치), 골든 비교 4시나리오(통과·회귀·n불일치·골든없음) 검증, 비교 코어 테스트 3개·전체 30개 통과 | B-11 |
 | 2026-09-23 | decision | W3 회귀 기준선 설계: 골든=config별{hit@5,recall,mrr}+n_questions(baselines/ 커밋), 하락만 실패·허용치 0.01(노이즈<0.01<1문항 0.038), --update-baseline로만 갱신, Qasper fixture git 커밋, cpu/gpu 티어 분리 | B-11 |
 | 2026-09-22 | result | 답변 보류 진단(26문항·BM25→리랭커): 리랭커 top-1 logit 컷오프 시 남긴 Hit@5 단조 증가(cutoff 0: 0.571/46% 보류, cutoff 2: 0.667/65% 보류), 전체 0.462(B-7과 일치). 점수는 보정된 보류 신호이나 coverage 대가 큼 | B-10 |
@@ -97,6 +99,7 @@
 - [ ] **Week 2 — 생성 + 답변 평가.** Claude 인용 기반 생성 · LLM-judge(faithfulness/correctness/hallucination). end-to-end 베이스라인 수치.
 - [ ] **Week 3 — Ablation + 회귀.** 청킹·임베딩·hybrid·리랭커·top-k·프롬프트 비교표 → best config. **회귀 하네스**(임계값 + CI).
 - [x] **W3 중간 단계 — 회귀 하네스 CPU 티어 MVP.** bm25 지표를 골든과 비교해 하락 시 실패(exit 코드), `--update-baseline`로 골든 생성, 골든없음·n_questions 가드, argparse CLI(B-11). dense/rerank(GPU 티어)·GitHub Actions 배선은 후속.
+- [x] **W3 중간 단계 — 회귀 하네스 완성.** GitHub Actions CPU 티어 자동 게이트(push/PR에 unittest+bm25 골든), GPU 티어(dense·dense_rerank) 러너 추가·`--tier` 선택·골든 병합, ablation 표 생성기(B-12). 검색 축 ablation은 완료. 청킹·프롬프트·생성 모델 축 비교표는 Week 3 본 범위로 후속.
 - [ ] **Week 4 — 서빙 + 마감.** FastAPI + 최소 UI(스트리밍+인용) · 데모 GIF · 문서 마감.
 - [ ] **첫 버전 완료 후 — 관련 논문 검색.** 전체 코퍼스에서 관련 논문을 찾고 선택한 논문에 질문하는 흐름으로 확장. 검색 범위가 달라진 평가 결과는 첫 버전과 분리하여 기록한다(P0-7).
 
@@ -260,6 +263,18 @@ W3의 회귀 테스트다. 실험 스크립트로 낸 수치가 코드 변경으
 한계: dense·리랭커(GPU 티어)와 GitHub Actions 배선은 아직이다. 골든은 CPU·그리디라 결정적이지만 GPU 지표는 float 노이즈로 허용치가 필요하다. 골든값은 지금 bm25 한 config뿐이다.
 
 원칙: 회귀는 "저장된 정답지 vs 재실행"으로 자동 비교하고, 판정 임계값은 데이터의 양자화 간격(1문항=1/N)과 노이즈 크기 사이의 빈 구간에 둔다. 재현 불가능한 평가셋은 회귀의 전제를 무너뜨리므로 소량 fixture라도 커밋한다.
+
+## B-12. GPU 티어까지 회귀로 막고 ablation을 재현 가능한 표로 — W3 하네스 완성
+
+B-11의 러너는 bm25(CPU) 한 config만 골든과 비교했다. 정작 W1의 핵심 수치(dense Hit@5 0.615, dense→리랭커 0.692)는 GPU가 필요해 CI 밖이고 골든에도 없어, 검색 코드가 조용히 나빠져도 못 잡는다. 또 B-11 직후 GitHub Actions(CPU 티어)를 배선해 push·PR마다 unittest 30개 + bm25 골든 비교를 돌리고 첫 실행이 초록이었는데, 이 배선이 journal에 누락돼 있어 여기서 함께 기록한다.
+
+러너를 **티어 레지스트리**(`cpu`→bm25, `gpu`→dense·dense_rerank)로 일반화하고 `--tier cpu|gpu|all`로 고르게 했다. 두 티어의 계산 함수가 같은 모양 `(config별 지표 dict, n_questions)`을 내도록 [bm25 계산](scripts/bm25_evaluation.py)의 반환을 `{"bm25": …}`로 맞췄고, dense·dense_rerank는 기존 [파이프라인 실험](scripts/pipeline_experiment.py)의 `run`을 한 번 호출해(모델 1회 로드) `hit`/`recall`/`rr`를 골든 키 `hit@5`/`recall`/`mrr`로 매핑하는 [얇은 어댑터](scripts/pipeline_evaluation.py)로 뽑았다. compare는 티어마다 config들을 돌며 `find_regression_list`로 비교해 하나로 모은다. update는 파일을 통째로 덮어쓰던 방식에서 **기존 골든을 읽어 `dict.update`로 병합**하게 바꿔, `--tier gpu` 갱신이 기존 bm25를 지우지 않게 했다. [ablation 표](scripts/ablation_table.py)는 골든을 읽어 config별 지표를 markdown 표로 출력한다 — 표의 출처가 회귀 골든이라 항상 최신이고 재현 가능하다.
+
+**GPU 티어 골든에 dense Hit@5 0.615·dense_rerank 0.692가 들어가 W1(B-6·B-7)과 일치했고, `--tier all` 회귀 비교가 3 config(bm25·dense·dense_rerank)를 전부 통과(exit 0)했다. update 병합이 bm25를 보존함을 확인(값 불변)했고, 전체 30 테스트가 통과했다.** CI(CPU)는 bm25만 자동 게이트하고, GPU 티어는 RTX 3080에서 `--tier gpu`로 로컬 수동 비교한다. config별 표는 [EVALUATION](EVALUATION.md)의 Ablation·회귀 절에 기록한다.
+
+한계: GPU 골든은 float 노이즈로 허용치 0.01이 필요하다(CPU·그리디처럼 결정적이지 않다). 검색 축만 회귀 골든에 있고 청킹·프롬프트·생성 모델 축의 ablation 표는 아직이다.
+
+원칙: 자동 게이트가 불가능한 환경(무GPU CI)은 티어로 나눠 "자동 일부 + 수동 일부"로 두되, 수동 티어도 같은 골든·같은 러너로 비교해 기준을 하나로 유지한다.
 
 ---
 

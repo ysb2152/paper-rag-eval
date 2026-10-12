@@ -260,9 +260,37 @@ _(로컬 NLI 모델 선정·faithfulness 근사 정확도, LLM-judge 프롬프�
 
 _(각 축별 표 + 채택 결정 ID.)_
 
+### 검색 축 — 회귀 골든 기준 (2026-10-13)
+
+`baselines/retrieval.json`에 커밋된 회귀 골든에서 config별 검색 지표를 뽑은 표. 수치 출처가 회귀 기준선이라 재실행마다 동일하며 `scripts/ablation_table.py`로 재생성한다. 10편 26문항 마이크로 평균(dense·리랭커는 RTX 3080 GPU 티어, 로컬 수동).
+
+| config | Hit@5 | Recall@5 | MRR@5 |
+|---|---|---|---|
+| bm25 | 0.385 | 0.346 | 0.237 |
+| dense | 0.615 | 0.558 | 0.404 |
+| dense_rerank | 0.692 | 0.577 | 0.461 |
+
+검색이 BM25→dense에서 크게(Hit@5 +0.231), dense→리랭커에서 한 번 더(+0.077) 오른다. 질문별 진단은 B-6·B-7이고, 이 표는 그 수치를 회귀 골든으로 고정한 것이다.
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.ablation_table
+```
+
 ## 회귀 (CI)
 
 고정 test셋 + 지표 임계값. 변경마다 재실행, 하락 시 실패. 결과 로그를 상태표/여기 표로 누적.
+
+회귀 하네스는 골든(`baselines/retrieval.json`)에 config별 `{hit@5, recall, mrr}` + `n_questions`를 저장하고, 재실행 결과가 허용치(절대 0.01)를 넘게 하락하면 실패(exit 1)시킨다. 티어를 나눠, CPU(bm25)는 GitHub Actions에서 push·PR마다 자동(unittest 30개 + bm25 골든 비교), GPU(dense·dense_rerank)는 RTX 3080에서 `--tier gpu`로 로컬 수동 비교한다. 골든 갱신은 `--update-baseline`로만 한다(손으로 적지 않음). 설계 근거는 DEVELOPMENT_JOURNEY B-11·B-12.
+
+| 티어 | config | 실행 | 골든 Hit@5 |
+|---|---|---|---|
+| CPU | bm25 | CI 자동 | 0.385 |
+| GPU | dense | 로컬 수동 | 0.615 |
+| GPU | dense_rerank | 로컬 수동 | 0.692 |
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.regression_runner --tier all
+```
 
 ## 비용 로그
 
