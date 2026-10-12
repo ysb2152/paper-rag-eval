@@ -1,10 +1,11 @@
 from pathlib import Path
-from scripts.pipeline_experiment import run
+
 
 
 paths = [path for path in Path("data/papers").glob("*.json")]
 
 def compute_pipeline_metrics():
+    from scripts.pipeline_experiment import run
     report=run(paths)
     golden=dict()
     n_questions=report["evaluated_questions"]
