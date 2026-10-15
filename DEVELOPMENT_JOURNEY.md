@@ -6,6 +6,8 @@
 
 | 날짜(ISO) | 분류 | 내용 | 관련ID |
 |---|---|---|---|
+| 2026-10-16 | result | top-k 스윕(candidate_k=20 고정, k 3/5/10): Hit·Recall 단조 증가(dense_rerank 0.500→0.692→0.769), MRR 거의 불변(0.417→0.461→0.471). k=5 행 골든과 일치. 프롬프트·생성 모델 축 표를 EVALUATION Ablation 절로 승격 | B-13 |
+| 2026-10-16 | decision | 작동점 top-k는 검색 축만으로 결정하지 않음 — recall은 k=10 최선이나 답 축(F1·충실성) k 의존성 미측정이라 k=5 유지(보류성) | B-13 |
 | 2026-10-13 | feat | W3 회귀 하네스 완성 — GPU 티어(dense·dense_rerank) 러너 추가·`--tier` 선택·골든 병합, ablation 표 생성기. `--tier all` 3 config 통과, dense Hit@5 0.615·dense_rerank 0.692(B-6·B-7 일치) | B-12 |
 | 2026-09-23 | feat | GitHub Actions CPU 티어 배선 — push/PR에 unittest + bm25 골든 비교, 첫 실행 초록(B-11 직후, 기록 누락분) | B-11 |
 | 2026-09-23 | feat | 회귀 하네스 러너(bm25 CPU 티어): fixture 26문항 마이크로 Hit@5 0.385 재현(B-6과 일치), 골든 비교 4시나리오(통과·회귀·n불일치·골든없음) 검증, 비교 코어 테스트 3개·전체 30개 통과 | B-11 |
@@ -100,6 +102,7 @@
 - [ ] **Week 3 — Ablation + 회귀.** 청킹·임베딩·hybrid·리랭커·top-k·프롬프트 비교표 → best config. **회귀 하네스**(임계값 + CI).
 - [x] **W3 중간 단계 — 회귀 하네스 CPU 티어 MVP.** bm25 지표를 골든과 비교해 하락 시 실패(exit 코드), `--update-baseline`로 골든 생성, 골든없음·n_questions 가드, argparse CLI(B-11). dense/rerank(GPU 티어)·GitHub Actions 배선은 후속.
 - [x] **W3 중간 단계 — 회귀 하네스 완성.** GitHub Actions CPU 티어 자동 게이트(push/PR에 unittest+bm25 골든), GPU 티어(dense·dense_rerank) 러너 추가·`--tier` 선택·골든 병합, ablation 표 생성기(B-12). 검색 축 ablation은 완료. 청킹·프롬프트·생성 모델 축 비교표는 Week 3 본 범위로 후속.
+- [x] **W3 중간 단계 — top-k 스윕 + ablation 축 정리.** candidate_k 고정, top-k 3/5/10 스윕으로 검색 지표의 k 의존성 측정(MRR 둔감·recall 단조, 작동점 k는 답 축 미측정이라 k=5 보류). 프롬프트·생성 모델 축 표를 EVALUATION Ablation 절로 승격·결정 ID 부여(B-13). 청킹·임베딩 대안·생성 모델(Claude) 축은 후속.
 - [ ] **Week 4 — 서빙 + 마감.** FastAPI + 최소 UI(스트리밍+인용) · 데모 GIF · 문서 마감.
 - [ ] **첫 버전 완료 후 — 관련 논문 검색.** 전체 코퍼스에서 관련 논문을 찾고 선택한 논문에 질문하는 흐름으로 확장. 검색 범위가 달라진 평가 결과는 첫 버전과 분리하여 기록한다(P0-7).
 
@@ -272,9 +275,21 @@ B-11의 러너는 bm25(CPU) 한 config만 골든과 비교했다. 정작 W1의 �
 
 **GPU 티어 골든에 dense Hit@5 0.615·dense_rerank 0.692가 들어가 W1(B-6·B-7)과 일치했고, `--tier all` 회귀 비교가 3 config(bm25·dense·dense_rerank)를 전부 통과(exit 0)했다. update 병합이 bm25를 보존함을 확인(값 불변)했고, 전체 30 테스트가 통과했다.** CI(CPU)는 bm25만 자동 게이트하고, GPU 티어는 RTX 3080에서 `--tier gpu`로 로컬 수동 비교한다. config별 표는 [EVALUATION](EVALUATION.md)의 Ablation·회귀 절에 기록한다.
 
-한계: GPU 골든은 float 노이즈로 허용치 0.01이 필요하다(CPU·그리디처럼 결정적이지 않다). 검색 축만 회귀 골든에 있고 청킹·프롬프트·생성 모델 축의 ablation 표는 아직이다.
+한계: GPU 골든은 float 노이즈로 허용치 0.01이 필요하다(CPU·그리디처럼 결정적이지 않다). 회귀 골든에는 검색 축만 있다(top-k·프롬프트·생성 모델 축 ablation 표는 B-13, 청킹·임베딩 대안은 후속).
 
 원칙: 자동 게이트가 불가능한 환경(무GPU CI)은 티어로 나눠 "자동 일부 + 수동 일부"로 두되, 수동 티어도 같은 골든·같은 러너로 비교해 기준을 하나로 유지한다.
+
+---
+
+## B-13. top-k를 바꾸면 무엇을 사고 무엇을 못 사는가 — 검색 축 top-k 스윕
+
+회귀 골든에는 top-k=5 한 점만 있어 "k를 바꾸면 검색 지표가 어떻게 움직이는지"는 안 보였다. candidate_k(리랭커 후보 풀)를 20으로 고정하고 top_k만 3·5·10으로 바꿔 [파이프라인 실험](scripts/pipeline_experiment.py)의 `run`을 세 번 호출하는 [스윕 스크립트](scripts/topk_sweep.py)로 뽑았다(10편 26문항 마이크로 평균, GPU 로컬). `run`이 이미 top_k를 인자로 받아 새 실험 로직은 필요 없었고, 요인을 격리하려고 candidate_k는 고정해 "최종 몇 개를 보느냐"만 변수로 뒀다.
+
+**dense_rerank Hit@k 0.500→0.692→0.769, Recall 0.462→0.577→0.750으로 k에 단조 증가했지만 MRR은 0.417→0.461→0.471로 거의 둔감했다.** 첫 gold 문단이 대개 상위에 있어, k를 키우면 하위 순위의 gold가 recall로 더 잡힐 뿐 첫 정답 순위(MRR)는 거의 그대로다 — k는 recall을 사지 순위 품질을 사지 않는다. 모든 k에서 dense_rerank > dense > bm25_rerank 순서가 유지돼 약한 1단계가 리랭커 천장을 낮춘다는 B-7이 재확인됐다. k=5 행이 회귀 골든과 동일(dense 0.615, dense_rerank 0.692)해 스윕 경로의 일관성도 확인했다.
+
+작동점 k는 여기서 결정하지 않았다. recall만 보면 k=10이 최선이지만, 검색 노이즈가 Answer-F1·충실성을 깎는다는 B-8·B-9가 있어 "문단을 더 주는 것"이 답 품질에 공짜가 아니다. 어느 k가 답 품질을 최대화하는지는 답 축의 k 의존성을 측정해야(생성 런 필요) 하며, 그 전까지 W1부터의 기본값 **k=5를 유지한다(보류성 결정)**. 미측정 성과를 만들지 않으려고 검색 축에서 관측된 사실만 기록한다.
+
+원칙: ablation은 "지표가 어떻게 변하나"(측정)와 "그래서 무엇을 고르나"(결정)를 분리해야 한다. 한 축의 측정만으로 다른 축이 얽힌 작동점을 결정하면 측정하지 않은 주장이 된다.
 
 ---
 

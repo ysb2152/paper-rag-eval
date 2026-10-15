@@ -19,17 +19,28 @@ _이 README는 포트폴리오 어필용 개요다. 개발 일지는 [DEVELOPMEN
 
 ## 핵심 성과표
 
-_(수치 확보 후 채움 — 예: 베이스라인 대비 best config Recall@5, 환각률 개선 %)_
+_10편 26문항 개발용 부분집합(micro 평균). 검색은 BM25 베이스라인 대비 best config(dense→리랭커), 답변 축은 oracle 근거(천장) 대비 검색 근거(실제)의 진단. 상세·조건은 [EVALUATION](EVALUATION.md)._
 
-| 지표 | 베이스라인 | 개선 후 | Δ |
+**검색 (BM25 → dense→리랭커)**
+
+| 지표 | BM25 | dense→리랭커 | Δ |
 |---|---|---|---|
-| Recall@5 | — | — | — |
-| Faithfulness | — | — | — |
-| Hallucination rate | — | — | — |
+| Hit@5 | 0.385 | 0.692 | +0.308 |
+| Recall@5 | 0.346 | 0.577 | +0.231 |
+
+**답변 축 진단 (oracle 근거 → 검색 근거)**
+
+| 지표 | oracle(천장) | 검색(실제) |
+|---|---|---|
+| Answer-F1 | 0.533 | 0.416 |
+| 충실율(NLI) | 0.778 | 0.615 |
+| 환각율 | 0.222 | 0.385 |
+
+검색 품질이 답 품질의 천장이다 — 검색이 gold 문단을 top-5에 못 올리면 정확도·충실성이 함께 떨어진다(B-8·B-9).
 
 ## 데모
 
-현재는 단일 논문 JSON 로더, BM25 문단 검색, 명확한 본문 근거가 있는 질문의 검색 평가를 실행할 수 있다. GPU 패키지 없이 확인하려면 다음과 같이 설치한다. 입력 JSON은 Hugging Face Qasper의 논문 한 행을 저장한 형식이며 별도로 준비해야 한다. 로컬 GPU로는 dense(bge-m3)·리랭커(bge-reranker) 검색과 BM25·dense·hybrid(RRF) 비교도 실행하며, 10편 26문항 결과는 [EVALUATION의 B-6](EVALUATION.md)에 기록한다. 또한 Qwen2.5-7B로 근거에서 답을 생성해 Answer-F1로 채점하고(oracle 근거 대비 검색 근거의 손실 측정), 결과는 [EVALUATION의 B-8](EVALUATION.md)에 기록한다.
+현재는 단일 논문 JSON 로더, BM25 문단 검색, 명확한 본문 근거가 있는 질문의 검색 평가를 실행할 수 있다. GPU 패키지 없이 확인하려면 다음과 같이 설치한다. 입력 JSON은 Hugging Face Qasper의 논문 한 행을 저장한 형식이며 별도로 준비해야 한다. 로컬 GPU로는 dense(bge-m3)·리랭커(bge-reranker) 검색과 BM25·dense·hybrid(RRF) 비교도 실행하며, 10편 26문항 결과는 [EVALUATION의 B-6](EVALUATION.md)에 기록한다. 또한 Qwen2.5-7B로 근거에서 답을 생성해 Answer-F1로 채점하고(oracle 근거 대비 검색 근거의 손실 측정), 결과는 [EVALUATION의 B-8](EVALUATION.md)에 기록한다. W3에서는 골든(`baselines/retrieval.json`) 대비 검색 지표 하락을 회귀로 막고(CPU는 GitHub Actions 자동, GPU는 로컬 수동), config·top-k별 ablation 표를 재생성한다(B-11~B-13).
 
 ```powershell
 python -m venv .venv
