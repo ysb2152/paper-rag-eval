@@ -6,6 +6,7 @@
 
 | 날짜(ISO) | 분류 | 내용 | 관련ID |
 |---|---|---|---|
+| 2026-10-19 | feat | W4 서빙 — FastAPI `/ask`(검색→7B 생성→보류), lifespan 기동 1회 로딩. 10GB VRAM 제약으로 경량(임베더·리랭커) CPU 상주 + 7B GPU 4bit 상주 배치. `/docs` 수동 확인: 근거 5문단과 함께 답 반환, 근거 없는 질문은 Unanswerable·abstained | B-14 |
 | 2026-10-16 | result | top-k 스윕(candidate_k=20 고정, k 3/5/10): Hit·Recall 단조 증가(dense_rerank 0.500→0.692→0.769), MRR 거의 불변(0.417→0.461→0.471). k=5 행 골든과 일치. 프롬프트·생성 모델 축 표를 EVALUATION Ablation 절로 승격 | B-13 |
 | 2026-10-16 | decision | 작동점 top-k는 검색 축만으로 결정하지 않음 — recall은 k=10 최선이나 답 축(F1·충실성) k 의존성 미측정이라 k=5 유지(보류성) | B-13 |
 | 2026-10-13 | feat | W3 회귀 하네스 완성 — GPU 티어(dense·dense_rerank) 러너 추가·`--tier` 선택·골든 병합, ablation 표 생성기. `--tier all` 3 config 통과, dense Hit@5 0.615·dense_rerank 0.692(B-6·B-7 일치) | B-12 |
@@ -104,6 +105,7 @@
 - [x] **W3 중간 단계 — 회귀 하네스 완성.** GitHub Actions CPU 티어 자동 게이트(push/PR에 unittest+bm25 골든), GPU 티어(dense·dense_rerank) 러너 추가·`--tier` 선택·골든 병합, ablation 표 생성기(B-12). 검색 축 ablation은 완료. 청킹·프롬프트·생성 모델 축 비교표는 Week 3 본 범위로 후속.
 - [x] **W3 중간 단계 — top-k 스윕 + ablation 축 정리.** candidate_k 고정, top-k 3/5/10 스윕으로 검색 지표의 k 의존성 측정(MRR 둔감·recall 단조, 작동점 k는 답 축 미측정이라 k=5 보류). 프롬프트·생성 모델 축 표를 EVALUATION Ablation 절로 승격·결정 ID 부여(B-13). 청킹·임베딩 대안·생성 모델(Claude) 축은 후속.
 - [ ] **Week 4 — 서빙 + 마감.** FastAPI + 최소 UI(스트리밍+인용) · 데모 GIF · 문서 마감.
+- [x] **W4 중간 단계 — FastAPI 서빙 + 데모.** `/ask` 엔드포인트(검색→7B 생성→보류)와 lifespan 기동 1회 로딩, 경량 모델 CPU + 7B GPU 4bit 상주로 10GB VRAM 제약 해결. Swagger `/docs` 수동 확인·데모 GIF(B-14). 스트리밍 응답·전용 UI는 후속.
 - [ ] **첫 버전 완료 후 — 관련 논문 검색.** 전체 코퍼스에서 관련 논문을 찾고 선택한 논문에 질문하는 흐름으로 확장. 검색 범위가 달라진 평가 결과는 첫 버전과 분리하여 기록한다(P0-7).
 
 ---
@@ -290,6 +292,18 @@ B-11의 러너는 bm25(CPU) 한 config만 골든과 비교했다. 정작 W1의 �
 작동점 k는 여기서 결정하지 않았다. recall만 보면 k=10이 최선이지만, 검색 노이즈가 Answer-F1·충실성을 깎는다는 B-8·B-9가 있어 "문단을 더 주는 것"이 답 품질에 공짜가 아니다. 어느 k가 답 품질을 최대화하는지는 답 축의 k 의존성을 측정해야(생성 런 필요) 하며, 그 전까지 W1부터의 기본값 **k=5를 유지한다(보류성 결정)**. 미측정 성과를 만들지 않으려고 검색 축에서 관측된 사실만 기록한다.
 
 원칙: ablation은 "지표가 어떻게 변하나"(측정)와 "그래서 무엇을 고르나"(결정)를 분리해야 한다. 한 축의 측정만으로 다른 축이 얽힌 작동점을 결정하면 측정하지 않은 주장이 된다.
+
+---
+
+## B-14. 평가 하네스를 서비스로 — FastAPI `/ask`와 10GB 모델 배치
+
+실험 코드는 함수를 돌릴 때마다 `load_*()`로 모델을 올렸다 내렸지만, 서버로 쓰려면 7B 로드(약 28초)를 요청마다 반복할 수 없다. FastAPI [lifespan](src/serve/app.py)에서 세 모델을 기동 시 한 번 로드해 `app.state`에 상주시키고, `/ask`는 그 객체를 재사용만 한다. 엔드포인트는 [검색(search_embed→rerank)](scripts/pipeline_experiment.py) 패턴으로 근거 top-k를 모아 [7B 생성](src/generate/qwen.py)에 넣고, 생성기가 `Unanswerable`을 돌려주면 보류로 표시한다.
+
+**핵심 제약은 10GB VRAM이다 — bge-m3(임베더)·리랭커·7B 4bit를 동시에 올릴 수 없다**(검색 근거 실험도 검색을 끝내고 모델을 내린 뒤에야 7B를 올렸다). 서빙은 매 요청 모델을 교체할 수 없으므로, 경량 모델(임베더·리랭커)은 CPU에 상주시키고 7B만 GPU에 4bit로 상주시켰다. 이를 위해 [`load_embedder`](src/retrieve/embed.py)·[`load_reranker`](src/retrieve/rerank.py)에 device 인자를 추가하되 기본값은 기존 자동 선택(cuda 우선)을 유지해 실험 코드 호출은 그대로 뒀다. 쿼리 1건의 질문 임베딩·후보 20개 리랭크는 CPU로도 수 초이고, 7B 로드 28초는 기동 1회뿐이라 이후 요청은 즉답이다.
+
+Swagger `/docs`로 수동 확인했다: 논문 한 편에 "What is the seed lexicon?" → 근거 5문단과 함께 답 반환(abstained False), 논문에 없는 질문 → `Unanswerable`·abstained True.
+
+원칙: 티어(CPU/GPU) 분리는 코드 경로뿐 아니라 메모리 예산으로도 결정된다. 한 장치에 다 안 올라가면, 무거운 것 하나만 가속기에 두고 가벼운 것은 CPU로 상주시키는 배치가 "매 요청 로딩"보다 낫다.
 
 ---
 
