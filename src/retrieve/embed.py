@@ -22,11 +22,12 @@ from src.retrieve.bm25 import SearchResult
 MODEL_NAME = "BAAI/bge-m3"
 
 
-def load_embedder(model_name: str = MODEL_NAME):
+def load_embedder(model_name: str = MODEL_NAME,device:str=None):
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     # torch 2.5.1은 보안 이슈로 pytorch_model.bin(torch.load)을 거부하므로 safetensors를 쓴다.
     model = AutoModel.from_pretrained(model_name, use_safetensors=True)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    if device is None:
+        device="cuda" if torch.cuda.is_available() else "cpu"
     model.to(device).eval()
     return model, tokenizer, device
 

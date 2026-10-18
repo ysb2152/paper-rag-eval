@@ -17,10 +17,11 @@ from src.retrieve.bm25 import SearchResult, search_bm25
 MODEL_NAME = "BAAI/bge-reranker-v2-m3"
 
 
-def load_reranker(model_name: str = MODEL_NAME):
+def load_reranker(model_name: str = MODEL_NAME,device:str = None):
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForSequenceClassification.from_pretrained(model_name)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    if device is None:
+        device= "cuda" if torch.cuda.is_available() else "cpu"
     model.to(device).eval()
     return model, tokenizer, device
 
