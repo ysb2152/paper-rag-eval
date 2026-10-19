@@ -36,7 +36,7 @@ _10편 26문항 개발용 부분집합(micro 평균). 검색은 BM25 베이스�
 | 충실율(NLI) | 0.778 | 0.615 |
 | 환각율 | 0.222 | 0.385 |
 
-검색 품질이 답 품질의 천장이다 — 검색이 gold 문단을 top-5에 못 올리면 정확도·충실성이 함께 떨어진다(B-8·B-9).
+검색 품질이 답 품질의 천장이다 — 검색이 gold 문단을 top-5에 못 올리면 정확도·충실성이 함께 떨어진다(B-8·B-9). 작동점은 근거 수 k=5다: Answer-F1이 k=5에서 최대이고 k=10은 추가 근거의 노이즈로 오히려 하락한다(0.416→0.366, B-15).
 
 ## 데모
 
@@ -66,7 +66,9 @@ python -m venv .venv
 
 ## 아키텍처
 
-_(다이어그램 예정: ingest → chunk → embed(로컬 GPU) → FAISS → retrieve → rerank → Claude 생성(인용) → LLM-judge 평가)_
+![아키텍처 — 런타임 파이프라인과 평가 하네스](docs/architecture.svg)
+
+런타임은 논문·질문을 받아 검색(dense bge-m3) → 리랭커(bge-reranker-v2-m3) → 생성(Qwen2.5-7B)으로 답·인용을 내고 근거 부족 시 보류한다. 평가 하네스가 각 단계를 gold evidence·reference answer·NLI로 측정하고, ablation·회귀 골든(CI)으로 지표 하락을 막는다.
 
 ## 문서
 

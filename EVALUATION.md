@@ -294,10 +294,28 @@ candidate_k(리랭커 후보 풀)를 20으로 고정하고 top_k만 3·5·10으�
 
 - Hit·Recall은 k에 단조 증가하고 모든 k에서 dense_rerank > dense > bm25_rerank 순서가 유지된다 — 약한 1단계 검색(bm25)이 리랭커 천장을 낮춘다는 B-7이 다시 확인된다.
 - **MRR은 k에 거의 둔감하다**(dense 0.372→0.404→0.414). 첫 gold 문단이 대개 상위에 있어, k를 키우면 하위 순위의 gold가 recall로 더 잡힐 뿐 첫 정답 순위(MRR)는 거의 그대로다. k는 recall을 사지 순위 품질을 사지 않는다.
-- **작동점 k는 검색 축만으로 결정하지 않는다(B-13).** recall은 k=10이 가장 높지만, 생성기에 문단을 더 주면 노이즈로 Answer-F1·충실성이 떨어질 수 있다(B-8·B-9). 어느 k가 답 품질을 최대화하는지는 답 축의 k 의존성을 측정해야 정해지며, 그 측정 전까지 W1부터의 기본값 k=5를 유지한다.
+- **작동점 k는 검색 축만으로 결정하지 않는다(B-13).** recall은 k=10이 가장 높지만, 생성기에 문단을 더 주면 노이즈로 Answer-F1·충실성이 떨어질 수 있다(B-8·B-9). 어느 k가 답 품질을 최대화하는지는 답 축의 k 의존성을 측정해야 정해진다(아래 "답 축" 절에서 측정 완료 — Answer-F1은 k=5에서 최대, k=5 확정).
 
 ```powershell
 .\.venv\Scripts\python.exe -m scripts.topk_sweep
+```
+
+### 답 축 — 검색 근거 수(evidence_k)의 F1 의존성 (2026-10-19)
+
+위 top-k 축은 검색 지표만 봤다. 여기서는 candidate_k=20을 고정하고 생성기에 넣는 근거 수 evidence_k만 3·5·10으로 바꿔, 검색 근거로 답을 생성한 Answer-F1을 비교했다(51문항, RTX 3080 GPU 로컬). [answer_retrieved_experiment](scripts/answer_retrieved_experiment.py)의 `run`을 세 번 호출하는 `scripts/answer_topk_sweep.py`로 재생성한다.
+
+| evidence_k | mean Answer-F1 |
+|---|---|
+| 3 | 0.358 |
+| 5 | 0.416 |
+| 10 | 0.366 |
+
+- **F1은 비단조로 k=5에서 최대다.** k=3은 근거가 모자라고, k=10은 근거를 더 주는데도 0.416→0.366으로 떨어진다 — 늘어난 문단의 노이즈가 생성을 흐린다.
+- 검색 축에서 recall은 k=10이 최선이었지만(위 표), 답 축에서는 그 추가 recall이 F1을 깎는다. "검색 recall을 더 사도 답 품질은 공짜가 아니다"(B-8·B-9)가 실측으로 확인됐다.
+- **작동점 k=5는 B-13의 보류성 결정에서 측정된 결정으로 확정된다(B-15).** k=5의 0.416은 B-8의 검색 근거 F1과 일치해 스윕 경로의 일관성도 확인된다.
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.answer_topk_sweep
 ```
 
 ### 프롬프트 축 — 생성 지시 변형 (B-8)
