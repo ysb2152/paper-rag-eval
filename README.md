@@ -1,4 +1,4 @@
-# (제목 미정) — 평가 주도 RAG 어시스턴트 for AI/ML 논문
+# PaperRAG — 평가 주도 RAG 어시스턴트 for AI/ML 논문
 
 > AI/ML 논문(arXiv·NLP)에 대해 질문하면 근거 문단을 인용해 답한다. 핵심은 **답변 그 자체가 아니라, 검색·답변 품질을 정량으로 측정·개선하는 평가 하네스**다.
 
@@ -19,7 +19,7 @@ _이 README는 포트폴리오 어필용 개요다. 개발 일지는 [DEVELOPMEN
 
 ## 핵심 성과표
 
-_10편 26문항 개발용 부분집합(micro 평균). 검색은 BM25 베이스라인 대비 best config(dense→리랭커), 답변 축은 oracle 근거(천장) 대비 검색 근거(실제)의 진단. 상세·조건은 [EVALUATION](EVALUATION.md)._
+_10편 개발용 부분집합(micro 평균) — 검색 축은 보류 규칙 통과 26문항, 답변 축은 전체 51문항. 검색은 BM25 베이스라인 대비 best config(dense→리랭커), 답변 축은 oracle 근거(천장) 대비 검색 근거(실제)의 진단. 상세·조건은 [EVALUATION](EVALUATION.md)._
 
 **검색 (BM25 → dense→리랭커)**
 
