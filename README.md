@@ -52,16 +52,19 @@ python -m venv .venv
 
 평가 명령은 질문별 검색 ID·점수·Hit·Recall·RR, 질문 평균, 보류 사유를 JSON으로 출력한다. 첫 샘플에서는 9개 중 4개를 평가하고 5개를 보류한다. 전체 벤치마크 성능이 아닌 개발용 실행 결과이며, 포함 조건과 수치는 [EVALUATION의 B-3](EVALUATION.md#b-3-bm25-4개-질문-평가-2026-09-18)에 기록한다.
 
-**W4 — FastAPI `/ask` 서빙 (Swagger `/docs`)**
+**W4 — FastAPI 서빙: 전용 웹 UI + `/ask` (Swagger `/docs`)**
 
 ![/ask 데모](docs/demo.gif)
 
 논문 한 편과 질문을 주면 검색(dense→리랭커)으로 근거 문단을 모아 로컬 7B가 답하고, 인용 문단과 함께 반환한다. 근거가 답을 담지 못하면 보류한다(`abstained`). 세 모델은 서버 기동 시 1회 로딩해 상주한다 — 10GB VRAM 제약 때문에 경량 모델(임베더·리랭커)은 CPU, 7B만 GPU 4bit에 둔다. 그래서 7B 로드(~28초)는 기동 때 한 번뿐이고 이후 요청은 즉답이다(B-14).
 
+루트 `/`에서 전용 웹 UI도 제공한다 — 질문을 넣으면 `/ask/stream`(SSE)으로 생성 토큰이 실시간으로 흐르고, 인용 문단과 보류 배지를 함께 보여준다(B-16).
+
 ```powershell
 .\.venv\Scripts\python.exe -m pip install fastapi==0.115.6 "uvicorn[standard]==0.34.0"
 .\.venv\Scripts\python.exe -m uvicorn src.serve.app:app
-# http://127.0.0.1:8000/docs 에서 /ask 호출 (paper_path, question)
+# http://127.0.0.1:8000/ 전용 웹 UI (질문 입력·실시간 스트림)
+# http://127.0.0.1:8000/docs Swagger 에서 /ask 직접 호출 (paper_path, question)
 ```
 
 ## 아키텍처
