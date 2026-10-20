@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PaperRAG</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --card: #ffffff;
+      --text: #1b1f24;
+      --muted: #5c6670;
+      --border: #e2e6ea;
+      --accent: #3b6fb5;
+      --accent-soft: #e8eefc;
+      --evidence: #f1efe8;
+      --abstain: #a8651d;
+      --abstain-soft: #fbeede;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #14181d;
+        --card: #1c2127;
+        --text: #e7ebef;
+        --muted: #9aa5b1;
+        --border: #2b313a;
+        --accent: #6fa0e0;
+        --accent-soft: #1e2a3d;
+        --evidence: #22262c;
+        --abstain: #e0a35c;
+        --abstain-soft: #2e2418;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
+      line-height: 1.6;
+    }
+    .wrap { max-width: 760px; margin: 0 auto; padding: 40px 20px 80px; }
+    header { margin-bottom: 28px; }
+    h1 { font-size: 1.7rem; margin: 0; letter-spacing: -0.01em; }
+    .sub { color: var(--muted); margin-top: 4px; font-size: 0.95rem; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 6px; }
+    input, textarea {
+      width: 100%;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      padding: 10px 12px;
+      font: inherit;
+      resize: vertical;
+    }
+    input:focus, textarea:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+    .row { display: flex; gap: 14px; margin-bottom: 14px; }
+    .row > div:first-child { flex: 1; }
+    .k-field { width: 110px; }
+    button {
+      background: var(--accent);
+      color: #fff;
+      border: 0;
+      border-radius: 9px;
+      padding: 11px 22px;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.55; cursor: default; }
+    .answer-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .answer-head h2 { font-size: 1.05rem; margin: 0; }
+    .badge {
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 2px 10px;
+      border-radius: 999px;
+      background: var(--abstain-soft);
+      color: var(--abstain);
+    }
+    #answer { font-size: 1.05rem; min-height: 1.6em; white-space: pre-wrap; }
+    .cursor { display: inline-block; width: 7px; background: var(--accent); animation: blink 1s steps(2) infinite; }
+    @keyframes blink { 0%, 50% { opacity: 1; } 50.01%, 100% { opacity: 0; } }
+    .status { color: var(--muted); font-size: 0.9rem; }
+    .evidence-list { list-style: none; margin: 0; padding: 0; counter-reset: ev; }
+    .evidence-list li {
+      counter-increment: ev;
+      background: var(--evidence);
+      border-radius: 9px;
+      padding: 12px 14px 12px 40px;
+      margin-bottom: 10px;
+      position: relative;
+      font-size: 0.92rem;
+      color: var(--text);
+    }
+    .evidence-list li::before {
+      content: counter(ev);
+      position: absolute;
+      left: 12px; top: 12px;
+      width: 20px; height: 20px;
+      border-radius: 6px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 0.75rem;
+      font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .hidden { display: none; }
+    .hint { color: var(--muted); font-size: 0.8rem; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>PaperRAG</h1>
+      <div class="sub">평가 주도 RAG — 논문 한 편에 질문하면 근거를 인용해 답합니다</div>
+    </header>
+
+    <div class="card">
+      <div class="row">
+        <div>
+          <label for="paper">논문 JSON 경로</label>
+          <input id="paper" value="data/qasper-train-first-paper.json" spellcheck="false">
+          <div class="hint">서버 작업 디렉터리 기준 상대 경로 (Qasper 논문 한 행 JSON)</div>
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="question">질문</label>
+          <textarea id="question" rows="2" placeholder="How big is seed lexicon used for training?">How big is seed lexicon used for training?</textarea>
+        </div>
+        <div class="k-field">
+          <label for="k">근거 수 k</label>
+          <input id="k" type="number" min="1" max="20" value="5">
+        </div>
+      </div>
+      <button id="ask">질문</button>
+    </div>
+
+    <div id="result" class="card hidden">
+      <div class="answer-head">
+        <h2>답변</h2>
+        <span id="abstained" class="badge hidden">근거 부족 · 보류</span>
+      </div>
+      <div id="answer"></div>
+      <div id="status" class="status"></div>
+    </div>
+
+    <div id="evidence-card" class="card hidden">
+      <div class="answer-head"><h2>인용 근거</h2></div>
+      <ul id="evidence" class="evidence-list"></ul>
+    </div>
+  </div>
+
+  <script>
+    const btn = document.getElementById("ask");
+    const answerEl = document.getElementById("answer");
+    const statusEl = document.getElementById("status");
+    const abstainedEl = document.getElementById("abstained");
+    const resultCard = document.getElementById("result");
+    const evidenceCard = document.getElementById("evidence-card");
+    const evidenceEl = document.getElementById("evidence");
+
+    btn.addEventListener("click", ask);
+
+    async function ask() {
+      const paper_path = document.getElementById("paper").value.trim();
+      const question = document.getElementById("question").value.trim();
+      const evidence_k = parseInt(document.getElementById("k").value, 10) || 5;
+      if (!paper_path || !question) return;
+
+      btn.disabled = true;
+      resultCard.classList.remove("hidden");
+      evidenceCard.classList.add("hidden");
+      abstainedEl.classList.add("hidden");
+      evidenceEl.innerHTML = "";
+      answerEl.innerHTML = '<span class="cursor">&nbsp;</span>';
+      statusEl.textContent = "검색하고 답을 생성하는 중…";
+
+      let answer = "";
+      const setAnswer = () => {
+        answerEl.innerHTML = answer.replace(/</g, "&lt;") + '<span class="cursor">&nbsp;</span>';
+      };
+
+      try {
+        const res = await fetch("/ask/stream", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ paper_path, question, evidence_k }),
+        });
+        if (!res.ok) throw new Error("서버 오류 " + res.status);
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          let idx;
+          while ((idx = buf.indexOf("\n\n")) >= 0) {
+            const chunk = buf.slice(0, idx);
+            buf = buf.slice(idx + 2);
+            if (!chunk.startsWith("data:")) continue;
+            const ev = JSON.parse(chunk.slice(5).trim());
+            if (ev.type === "evidence") {
+              renderEvidence(ev.evidence);
+              statusEl.textContent = "답 생성 중…";
+            } else if (ev.type === "token") {
+              answer += ev.text;
+              setAnswer();
+            } else if (ev.type === "done") {
+              answerEl.textContent = answer;
+              statusEl.textContent = "";
+              if (ev.abstained) abstainedEl.classList.remove("hidden");
+            }
+          }
+        }
+      } catch (e) {
+        answerEl.textContent = "";
+        statusEl.textContent = "요청 실패: " + e.message;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function renderEvidence(list) {
+      evidenceEl.innerHTML = "";
+      for (const text of list) {
+        const li = document.createElement("li");
+        li.textContent = text;
+        evidenceEl.appendChild(li);
+      }
+      if (list.length) evidenceCard.classList.remove("hidden");
+    }
+  </script>
+</body>
+</html>

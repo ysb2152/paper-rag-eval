@@ -6,8 +6,15 @@
 답을 생성하는 추론이며 이 데이터로 미세조정하지 않는다.
 """
 
+from threading import Thread
+
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from transformers import (
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    BitsAndBytesConfig,
+    TextIteratorStreamer,
+)
 
 MODEL_NAME = "Qwen/Qwen2.5-7B-Instruct"
 
@@ -58,3 +65,42 @@ def generate_answer(
     generated = model.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False)
     new_tokens = generated[0][inputs.input_ids.shape[1]:]
     return tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+
+
+def stream_answer(
+    question: str,
+    evidence: list[str],
+    model,
+    tokenizer,
+    max_new_tokens: int = 64,
+):
+    """generate_answer와 같은 답을 생성하되, 완성될 때까지 기다리지 않고 토큰을
+    만들어지는 대로 조각 문자열로 내보낸다. 서빙에서 답을 실시간으로 흘려보내기 위함이다.
+
+    transformers의 generate는 블로킹이라, TextIteratorStreamer에 생성 토큰을 밀어넣게
+    하고 generate 자체는 별도 스레드에서 돌린다. 이 함수는 스트리머를 순회하며 조각을
+    yield한다. torch.no_grad()는 스레드 로컬이라 generate를 돌리는 워커 스레드 안에서
+    다시 감싸야 추론 그래프가 쌓이지 않는다.
+    """
+    prompt = tokenizer.apply_chat_template(
+        build_messages(question, evidence), tokenize=False, add_generation_prompt=True
+    )
+    inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+    streamer = TextIteratorStreamer(
+        tokenizer, skip_prompt=True, skip_special_tokens=True
+    )
+
+    def run():
+        with torch.no_grad():
+            model.generate(
+                **inputs,
+                streamer=streamer,
+                max_new_tokens=max_new_tokens,
+                do_sample=False,
+            )
+
+    thread = Thread(target=run)
+    thread.start()
+    for piece in streamer:
+        yield piece
+    thread.join()
