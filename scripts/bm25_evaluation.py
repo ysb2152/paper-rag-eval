@@ -1,11 +1,15 @@
-from pathlib import Path
+
 
 from src.ingest.qasper import load_paper
 
 from src.eval.retrieval import evaluate_paper
 # data/papers 폴더의 논문 JSON을 전부 불러온다.
 
-papers = [load_paper(path) for path in Path("data/papers").glob("*.json")]
+with open('./baselines/regression_papers.txt','r',encoding='utf-8') as f:
+    path_list=f.readlines()
+
+papers=[load_paper("data/papers/"+path.strip()+".json") for path in path_list]
+
 
 
 def compute_bm25_metrics():

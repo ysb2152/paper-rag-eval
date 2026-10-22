@@ -1,8 +1,10 @@
-from pathlib import Path
 
 
 
-paths = [path for path in Path("data/papers").glob("*.json")]
+with open("./baselines/regression_papers.txt","r",encoding="utf-8") as f:
+    path_list=f.readlines()
+
+paths = ["data/papers/"+path.strip()+".json" for path in path_list]
 
 def compute_pipeline_metrics():
     from scripts.pipeline_experiment import run
