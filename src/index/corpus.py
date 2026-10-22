@@ -52,6 +52,19 @@ def search(query,k=5):
 
     return sortedindex
 
+def rank_papers(query,vectors,meta,model,tokenizer,device):
+
+    query_vector = (encode([query], model, tokenizer, device, 512, 8)[0]).numpy()
+    scores = vectors @ query_vector
+    scoredict=dict()
+    for i in range(len(meta)):
+        paper_id=meta[i]["id"].split(":")[0]
+        scoredict[paper_id]=max(float(scores[i]),scoredict.get(paper_id,float(scores[i])))
+
+    sortedict=sorted(scoredict.items(),key=lambda x: -x[1])
+
+    return sortedict
+
 
 
 if __name__ == "__main__": build()
