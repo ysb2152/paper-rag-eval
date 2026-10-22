@@ -1,25 +1,25 @@
-# PaperRAG — 평가 주도 RAG 어시스턴트 for AI/ML 논문
+# PaperRAG — AI/ML 논문 질의응답 RAG
 
-> AI/ML 논문(arXiv·NLP)에 대해 질문하면 근거 문단을 인용해 답한다. 핵심은 **답변 그 자체가 아니라, 검색·답변 품질을 정량으로 측정·개선하는 평가 하네스**다.
+> AI/ML 논문(arXiv·NLP)에 질문하면 근거 문단을 인용해 답한다. 초점은 답변 자체보다, 검색과 답변의 품질을 수치로 측정하고 개선하는 평가 하네스에 있다.
 
-_이 README는 포트폴리오 어필용 개요다. 개발 일지는 [DEVELOPMENT_JOURNEY](DEVELOPMENT_JOURNEY.md), 상세 지표는 [EVALUATION](EVALUATION.md) 참고._
+개발 과정은 [DEVELOPMENT_JOURNEY](DEVELOPMENT_JOURNEY.md)에, 상세 지표와 측정 조건은 [EVALUATION](EVALUATION.md)에 정리했다.
 
 ## 한눈에
 
-- **문제:** 대부분의 RAG 데모는 "그럴듯한 답"을 보여줄 뿐, 검색이 맞는 문단을 가져왔는지·답이 근거에 충실한지를 **측정하지 않는다**.
-- **접근:** 검색 평가(recall@k·MRR·nDCG) + 답변 평가(Qasper Answer-F1 · 로컬 NLI 기반 faithfulness/환각률) + 청킹/임베딩/리랭커/프롬프트/생성모델 **ablation** + **회귀 테스트(CI식)** 를 1급 시민으로.
-- **채점은 전부 무료·재현 가능**(gold evidence + 표준 F1 + 로컬 NLI). Claude 는 하드 의존이 아니라 로컬 vs API 를 측정으로 비교하는 대상.
-- **스택:** 로컬 GPU 임베딩·리랭커·NLI·생성(bge-m3 / bge-reranker / Qwen2.5-7B, RTX 3080) + FAISS + (선택) Claude API + FastAPI.
+- 문제: RAG 데모는 대개 답을 보여줄 뿐, 검색이 맞는 문단을 가져왔는지, 답이 근거에 충실한지를 측정하지 않는다.
+- 접근: 먼저 검색 평가(Hit@k·Recall@k·MRR)와 답변 평가(Qasper Answer-F1, 로컬 NLI 기반 충실성·환각률)를 세운다. 그 위에서 리랭커·top-k·프롬프트·생성 모델을 축으로 ablation을 돌리고, 지표가 조용히 나빠지지 않도록 골든 비교 회귀 테스트를 CI에 걸었다.
+- 채점은 전부 무료이고 재현 가능하다(gold evidence + 표준 F1 + 로컬 NLI). Claude API는 필수 의존이 아니라, 로컬 생성과 비교하는 선택 축이다.
+- 스택: 로컬 GPU(RTX 3080)에서 임베딩(bge-m3)·리랭커(bge-reranker-v2-m3)·NLI·생성(Qwen2.5-7B)을 돌리고, FastAPI로 서빙한다.
 
-## 구현 범위 (계획)
+## 구현 범위
 
-첫 버전은 **논문 하나를 선택하고 질문하는 QA**다. 선택한 논문 안에서 근거를 검색하고, 답변과 인용 원문을 함께 제공한다. 근거가 부족하면 답변을 보류한다. 검색·답변 평가 결과와 실패 사례를 재실행할 수 있는 상태까지 완성한다.
+**지금까지 — 논문 한 편을 골라 질문하는 QA를 완성했다.** 선택한 논문 안에서 근거 문단을 검색하고(BM25·dense·hybrid·리랭커), Qwen2.5-7B가 그 근거로 답하며 인용 문단을 함께 돌려준다. 근거가 답을 담지 못하면 보류한다. 검색(Hit@k·Recall@k·MRR)과 답변(Answer-F1·NLI 충실성)을 평가하고, 리랭커·top-k·프롬프트·생성 모델 축으로 ablation을 측정했다. 골든 대비 지표 하락은 회귀 테스트로 막는다(CPU는 GitHub Actions 자동, GPU는 로컬 수동). 서빙은 FastAPI `/ask`와 스트리밍 응답, 전용 웹 UI까지 올렸다.
 
-이후 **관련 논문 검색 → 논문 선택 → 해당 논문에 질문**하는 흐름으로 확장한다. 여러 논문을 종합하는 답변은 별도 후속 후보로 둔다. 결정 근거와 완료 기준은 DEVELOPMENT_JOURNEY의 P0-7에 기록한다.
+**다음 — 코퍼스에서 관련 논문을 찾아 그 논문에 질문하는 흐름으로 확장한다.** 질문으로 논문을 먼저 고르고, 고른 논문 안에서만 근거를 검색하는 2단계 구조다. 코퍼스 문단 인덱스는 여기서 FAISS로 올린다. 여러 논문을 종합하는 답변은 후속 후보로 둔다. 설계와 완료 기준은 DEVELOPMENT_JOURNEY의 P0-7·P0-7.1에 있다.
 
 ## 핵심 성과표
 
-_10편 개발용 부분집합(micro 평균) — 검색 축은 보류 규칙 통과 26문항, 답변 축은 전체 51문항. 검색은 BM25 베이스라인 대비 best config(dense→리랭커), 답변 축은 oracle 근거(천장) 대비 검색 근거(실제)의 진단. 상세·조건은 [EVALUATION](EVALUATION.md)._
+_10편 개발용 부분집합(micro 평균) — 검색 축은 보류 규칙을 통과한 26문항, 답변 축은 전체 51문항. 검색은 BM25 베이스라인 대비 best config(dense→리랭커), 답변 축은 oracle 근거(천장) 대비 검색 근거(실제)의 진단이다. 상세·조건은 [EVALUATION](EVALUATION.md)._
 
 **검색 (BM25 → dense→리랭커)**
 
@@ -36,11 +36,11 @@ _10편 개발용 부분집합(micro 평균) — 검색 축은 보류 규칙 통�
 | 충실율(NLI) | 0.778 | 0.615 |
 | 환각율 | 0.222 | 0.385 |
 
-검색 품질이 답 품질의 천장이다 — 검색이 gold 문단을 top-5에 못 올리면 정확도·충실성이 함께 떨어진다(B-8·B-9). 작동점은 근거 수 k=5다: Answer-F1이 k=5에서 최대이고 k=10은 추가 근거의 노이즈로 오히려 하락한다(0.416→0.366, B-15).
+검색 품질이 답 품질의 천장이다. 검색이 gold 문단을 top-5에 못 올리면 정확도와 충실성이 함께 떨어진다(B-8·B-9). 작동점은 근거 수 k=5다. Answer-F1이 k=5에서 최대이고, k=10은 추가 근거의 노이즈로 오히려 떨어진다(0.416→0.366, B-15).
 
 ## 데모
 
-현재는 단일 논문 JSON 로더, BM25 문단 검색, 명확한 본문 근거가 있는 질문의 검색 평가를 실행할 수 있다. GPU 패키지 없이 확인하려면 다음과 같이 설치한다. 입력 JSON은 Hugging Face Qasper의 논문 한 행을 저장한 형식이며 별도로 준비해야 한다. 로컬 GPU로는 dense(bge-m3)·리랭커(bge-reranker) 검색과 BM25·dense·hybrid(RRF) 비교도 실행하며, 10편 26문항 결과는 [EVALUATION의 B-6](EVALUATION.md)에 기록한다. 또한 Qwen2.5-7B로 근거에서 답을 생성해 Answer-F1로 채점하고(oracle 근거 대비 검색 근거의 손실 측정), 결과는 [EVALUATION의 B-8](EVALUATION.md)에 기록한다. W3에서는 골든(`baselines/retrieval.json`) 대비 검색 지표 하락을 회귀로 막고(CPU는 GitHub Actions 자동, GPU는 로컬 수동), config·top-k별 ablation 표를 재생성한다(B-11~B-13).
+아래는 GPU 없이 CPU만으로 돌려 볼 수 있는 최소 실행이다. 입력 JSON은 Hugging Face Qasper 논문 한 행을 저장한 형식이라 따로 준비해야 한다.
 
 ```powershell
 python -m venv .venv
@@ -50,15 +50,17 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-평가 명령은 질문별 검색 ID·점수·Hit·Recall·RR, 질문 평균, 보류 사유를 JSON으로 출력한다. 첫 샘플에서는 9개 중 4개를 평가하고 5개를 보류한다. 전체 벤치마크 성능이 아닌 개발용 실행 결과이며, 포함 조건과 수치는 [EVALUATION의 B-3](EVALUATION.md#b-3-bm25-4개-질문-평가-2026-09-18)에 기록한다.
+평가 명령은 질문별 검색 ID·점수·Hit·Recall·RR과 질문 평균, 보류 사유를 JSON으로 출력한다. 첫 샘플에서는 9개 중 4개를 평가하고 5개를 보류한다. 전체 벤치마크가 아니라 개발용 실행 결과이며, 포함 조건과 수치는 [EVALUATION의 B-3](EVALUATION.md#b-3-bm25-4개-질문-평가-2026-09-18)에 있다.
+
+로컬 GPU가 있으면 dense(bge-m3)·리랭커 검색과 BM25·dense·hybrid 비교, Qwen2.5-7B 답변 생성과 Answer-F1 채점까지 돌릴 수 있다. 결과는 [EVALUATION](EVALUATION.md)의 B-6·B-8에 정리했다. 회귀 테스트는 골든(`baselines/retrieval.json`) 대비 검색 지표가 떨어지면 실패하고(B-11~B-13), config·top-k별 ablation 표도 재생성한다.
 
 **W4 — FastAPI 서빙: 전용 웹 UI + `/ask` (Swagger `/docs`)**
 
 ![/ask 데모](docs/demo.gif)
 
-논문 한 편과 질문을 주면 검색(dense→리랭커)으로 근거 문단을 모아 로컬 7B가 답하고, 인용 문단과 함께 반환한다. 근거가 답을 담지 못하면 보류한다(`abstained`). 세 모델은 서버 기동 시 1회 로딩해 상주한다 — 10GB VRAM 제약 때문에 경량 모델(임베더·리랭커)은 CPU, 7B만 GPU 4bit에 둔다. 그래서 7B 로드(~28초)는 기동 때 한 번뿐이고 이후 요청은 즉답이다(B-14).
+논문 한 편과 질문을 주면 검색(dense→리랭커)으로 근거 문단을 모아 로컬 7B가 답하고, 인용 문단과 함께 반환한다. 근거가 답을 담지 못하면 보류한다(`abstained`). 세 모델은 서버가 뜰 때 한 번 로딩해 상주시킨다. 10GB VRAM 제약 때문에 경량 모델(임베더·리랭커)은 CPU에, 7B만 GPU 4bit에 둔다. 그래서 7B 로드(~28초)는 기동 때 한 번뿐이고 이후 요청은 바로 답한다(B-14).
 
-루트 `/`에서 전용 웹 UI도 제공한다 — 질문을 넣으면 `/ask/stream`(SSE)으로 생성 토큰이 실시간으로 흐르고, 인용 문단과 보류 배지를 함께 보여준다(B-16).
+루트 `/`에서는 전용 웹 UI를 제공한다. 질문을 넣으면 `/ask/stream`(SSE)으로 생성 토큰이 실시간으로 흐르고, 인용 문단과 보류 배지를 함께 보여준다(B-16).
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install fastapi==0.115.6 "uvicorn[standard]==0.34.0"
@@ -71,7 +73,7 @@ python -m venv .venv
 
 ![아키텍처 — 런타임 파이프라인과 평가 하네스](docs/architecture.svg)
 
-런타임은 논문·질문을 받아 검색(dense bge-m3) → 리랭커(bge-reranker-v2-m3) → 생성(Qwen2.5-7B)으로 답·인용을 내고 근거 부족 시 보류한다. 평가 하네스가 각 단계를 gold evidence·reference answer·NLI로 측정하고, ablation·회귀 골든(CI)으로 지표 하락을 막는다.
+런타임은 논문과 질문을 받아 검색(dense bge-m3) → 리랭커(bge-reranker-v2-m3) → 생성(Qwen2.5-7B)으로 답과 인용을 내고, 근거가 부족하면 보류한다. 평가 하네스는 각 단계를 gold evidence·reference answer·NLI로 측정하고, ablation과 회귀 골든(CI)으로 지표 하락을 막는다.
 
 ## 문서
 
@@ -80,4 +82,4 @@ python -m venv .venv
 
 ## 데이터·라이선스
 
-평가·코퍼스: **Qasper** (Allen Institute for AI, NLP 논문 QA). arXiv 논문 라이선스는 논문별 상이 — 사용 시 명시.
+평가·코퍼스: **Qasper** (Allen Institute for AI, NLP 논문 QA). arXiv 논문 라이선스는 논문별로 다르므로 사용 시 명시한다.
