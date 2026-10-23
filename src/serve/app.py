@@ -8,6 +8,8 @@ from src.retrieve.embed import load_embedder,search_embed
 from src.retrieve.rerank import load_reranker,rerank
 from src.generate.qwen import load_generator,generate_answer,stream_answer
 from src.ingest.qasper import load_paper
+import numpy as np
+from src.index.corpus import rank_papers,VECTORS_PATH,META_PATH
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -22,6 +24,7 @@ async def lifespan(app: FastAPI):
     app.state.embedder=load_embedder(device="cpu")
     app.state.reranker=load_reranker(device="cpu")
     app.state.generator=load_generator()
+    app.state.corpus=(np.load(VECTORS_PATH),json.load(open(META_PATH,encoding="utf-8")))
     yield
 
 app = FastAPI(lifespan=lifespan)
@@ -32,7 +35,6 @@ class AskRequest(BaseModel):
     paper_path: str
     question: str
     evidence_k: int = 5
-
 # /ask 응답 — 답·근거 문단·보류 여부
 
 class AskResponse(BaseModel):
@@ -40,30 +42,50 @@ class AskResponse(BaseModel):
     evidence: list[str]
     abstained: bool
 
+class CorpusRequest(BaseModel):
+    question: str
+    evidence_k: int = 5
+
+class CorpusResponse(BaseModel):
+    answer : str
+    evidence: list[str]
+    abstained: bool
+    routed_paper_id : str
 
 # 검색→리랭크→생성으로 답과 근거를 돌려준다. 'Unanswerable'이면 보류
 
-@app.post("/ask", response_model=AskResponse)
-def ask(req: AskRequest):
+
+
+def run_pipeline(paper,question,evidence_k):
+
     embed_model, embed_tok, embed_device = app.state.embedder
-    rr_model,rr_tok,rr_dev=app.state.reranker
+    rr_model, rr_tok, rr_dev = app.state.reranker
     gen_model, gen_tok = app.state.generator
-    paper=load_paper(req.paper_path)
-    candidate_list=search_embed(paper.paragraphs,req.question,embed_model,embed_tok,embed_device,candidate_k,max_length)
-    can_list=[]
+    candidate_list = search_embed(paper.paragraphs, question, embed_model, embed_tok, embed_device, candidate_k,
+                                  max_length)
+    can_list = []
     for ele in candidate_list:
         can_list.append(ele.paragraph)
-    evidence=rerank(req.question,can_list,rr_model,rr_tok,rr_dev,req.evidence_k,max_length)
-    evidence_list=[]
+    evidence = rerank(question, can_list, rr_model, rr_tok, rr_dev, evidence_k, max_length)
+    evidence_list = []
     for ele in evidence:
         evidence_list.append(ele.paragraph.text)
-    answer=generate_answer(req.question,evidence_list,gen_model,gen_tok)
-    if answer=="Unanswerable":
-        abstained=True
+    answer = generate_answer(question, evidence_list, gen_model, gen_tok)
+    if answer == "Unanswerable":
+        abstained = True
     else:
-        abstained=False
-    return AskResponse(answer=answer, evidence=evidence_list,abstained=abstained)
+        abstained = False
 
+    return (answer,evidence_list,abstained)
+
+@app.post("/ask", response_model=AskResponse)
+
+def ask(req: AskRequest):
+
+    paper = load_paper(req.paper_path)
+    answer,evidence_list,abstained=run_pipeline(paper,req.question,req.evidence_k)
+
+    return AskResponse(answer=answer, evidence=evidence_list,abstained=abstained)
 
 # payload를 SSE data 한 줄로 포맷
 
@@ -98,6 +120,16 @@ def ask_stream(req: AskRequest):
         yield sse({"type": "done", "abstained": answer == "Unanswerable"})
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+@app.post("/ask/corpus",response_model=CorpusResponse)
+def ask_corpus(req: CorpusRequest):
+    ranked=rank_papers(req.question,*app.state.corpus,*app.state.embedder)
+    paper_id=ranked[0][0]
+    paper= load_paper("data/papers/" + paper_id + ".json")
+    answer,evidence_list,abstained=run_pipeline(paper,req.question,req.evidence_k)
+
+    return CorpusResponse(answer=answer,evidence=evidence_list,abstained=abstained,routed_paper_id=paper_id)
+
 
 
 # 정적 데모 페이지 반환
