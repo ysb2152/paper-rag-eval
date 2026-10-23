@@ -6,6 +6,8 @@ with open("./baselines/regression_papers.txt","r",encoding="utf-8") as f:
 
 paths = ["data/papers/"+path.strip()+".json" for path in path_list]
 
+# 회귀셋을 dense·dense_rerank로 평가해 config별 지표와 문항 수를 돌려준다
+
 def compute_pipeline_metrics():
     from scripts.pipeline_experiment import run
     report=run(paths)

@@ -6,6 +6,8 @@ from pathlib import Path
 from src.ingest.qasper import load_paper
 
 
+# load_paper — 위치·근거 매핑 보존, 병렬 리스트 어긋나면 에러
+
 class LoadPaperTests(unittest.TestCase):
     def setUp(self):
         self.folder = tempfile.TemporaryDirectory()

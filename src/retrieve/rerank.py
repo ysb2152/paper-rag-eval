@@ -17,6 +17,8 @@ from src.retrieve.bm25 import SearchResult, search_bm25
 MODEL_NAME = "BAAI/bge-reranker-v2-m3"
 
 
+# bge-reranker 로드. device 미지정이면 cuda 있으면 cuda 없으면 cpu
+
 def load_reranker(model_name: str = MODEL_NAME,device:str = None):
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForSequenceClassification.from_pretrained(model_name)
@@ -25,6 +27,8 @@ def load_reranker(model_name: str = MODEL_NAME,device:str = None):
     model.to(device).eval()
     return model, tokenizer, device
 
+
+# (질문, 문단) 쌍을 교차 인코더에 넣어 관련도 점수로 다시 정렬, top_k만 남긴다
 
 def rerank(
     query: str,
@@ -60,6 +64,8 @@ def rerank(
     order = sorted(range(len(candidates)), key=lambda i: -scores[i])
     return [SearchResult(candidates[i], scores[i]) for i in order[:top_k]]
 
+
+# CLI: BM25로 후보 뽑고 리랭커로 재정렬한 top_k를 JSON으로 출력
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)

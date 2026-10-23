@@ -19,15 +19,17 @@ from src.retrieve.hybrid import reciprocal_rank_fusion
 METHODS = ("bm25", "dense", "hybrid")
 
 
+# 전체 순위에서 첫 gold 근거가 몇 위인지 돌려준다(없으면 None)
+
 def full_gold_rank(retrieved_ids: list[str], gold_ids: set[str]) -> int | None:
-    """전체 순위에서 첫 gold 근거가 몇 위인지 돌려준다(없으면 None)."""
     if not retrieved_ids:
         return None
     return score_retrieval(retrieved_ids, gold_ids, len(retrieved_ids))["first_gold_rank"]
 
 
+# 한 질문에 대해 세 방식의 top-k·gold 순위·지표를 담은 행을 만든다
+
 def build_row(paper, question, model, tokenizer, device, top_k, max_length, rrf_k) -> dict:
-    """한 질문에 대해 세 방식의 top-k·gold 순위·지표를 담은 행을 만든다."""
     total = len(paper.paragraphs)
     gold_ids = gold_paragraph_ids(question)
     bm25_ids = [r.paragraph.id for r in search_bm25(paper.paragraphs, question.text, total)]
@@ -51,6 +53,8 @@ def build_row(paper, question, model, tokenizer, device, top_k, max_length, rrf_
     }
 
 
+# 여러 논문의 평가 질문을 모아 세 방식을 마이크로 평균으로 비교한다
+
 def run(paths: list[str], top_k: int = 5, max_length: int = 512, rrf_k: int = 60) -> dict:
     model, tokenizer, device = load_embedder()
 
@@ -65,6 +69,8 @@ def run(paths: list[str], top_k: int = 5, max_length: int = 512, rrf_k: int = 60
             )
 
     count = len(rows)
+
+    # 방식·지표별 평균
 
     def mean(method: str, metric: str):
         return sum(row[method][metric] for row in rows) / count if count else None
@@ -83,6 +89,8 @@ def run(paths: list[str], top_k: int = 5, max_length: int = 512, rrf_k: int = 60
         "questions": rows,
     }
 
+
+# CLI: 세 방식 비교 리포트를 JSON으로 출력(선택: --out 저장)
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)

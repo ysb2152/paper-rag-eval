@@ -4,9 +4,13 @@ from src.eval.answer import answer_f1, answer_string, normalize_answer, token_f1
 from src.ingest.qasper import Answer, Question
 
 
+# 테스트용 Answer 하나 생성
+
 def make_answer(unanswerable=False, extractive_spans=None, free_form_answer="", yes_no=None):
     return Answer(unanswerable, extractive_spans or [], free_form_answer, yes_no, [])
 
+
+# normalize_answer — 소문자화·문장부호·관사·공백 정리
 
 class NormalizeTests(unittest.TestCase):
     def test_lowercases_removes_punctuation_and_articles(self):
@@ -15,6 +19,8 @@ class NormalizeTests(unittest.TestCase):
     def test_collapses_whitespace(self):
         self.assertEqual(normalize_answer("  two   words  "), "two words")
 
+
+# token_f1 — 토큰 F1 계산
 
 class TokenF1Tests(unittest.TestCase):
     def test_identical_after_normalization_is_one(self):
@@ -30,6 +36,8 @@ class TokenF1Tests(unittest.TestCase):
     def test_empty_prediction_is_zero(self):
         self.assertEqual(token_f1("", "answer"), 0.0)
 
+
+# answer_string — 답 유형 우선순위대로 문자열화
 
 class AnswerStringTests(unittest.TestCase):
     def test_unanswerable_wins(self):
@@ -47,6 +55,8 @@ class AnswerStringTests(unittest.TestCase):
         self.assertEqual(answer_string(make_answer(yes_no=True)), "Yes")
         self.assertEqual(answer_string(make_answer(yes_no=False)), "No")
 
+
+# answer_f1 — 주석자들 중 최대 F1, 근거 없으면 에러
 
 class AnswerF1Tests(unittest.TestCase):
     def test_max_over_annotators(self):

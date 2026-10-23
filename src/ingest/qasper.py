@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+# 문단 한 개 — 전역 고유 id·섹션·본문
+
 @dataclass
 class Paragraph:
     id: str
@@ -14,6 +16,8 @@ class Paragraph:
     paragraph_index: int
     text: str
 
+
+# 논문 한 편 — 문단과 질문 목록
 
 @dataclass
 class Paper:
@@ -24,6 +28,8 @@ class Paper:
     questions: list[Question]
 
 
+# 질문 한 개와 그에 달린 답들
+
 @dataclass
 class Question:
     id: str
@@ -31,11 +37,15 @@ class Question:
     answers: list[Answer]
 
 
+# 답의 근거 — 원문 텍스트와 매핑된 문단 id들
+
 @dataclass
 class Evidence:
     text: str
     paragraph_ids: list[str]
 
+
+# 답 한 개 — 보류여부·추출구간·자유서술·yes/no·근거
 
 @dataclass
 class Answer:
@@ -45,6 +55,8 @@ class Answer:
     yes_no: bool | None
     evidence: list[Evidence]
 
+
+# Qasper JSON 한 편을 읽어 Paper로. 문단 id는 {논문}:s{섹션}:p{문단}으로 전역 유일하게 매긴다
 
 def load_paper(path: str | Path) -> Paper:
     with open(path, encoding="utf-8-sig") as f:
@@ -93,6 +105,8 @@ def load_paper(path: str | Path) -> Paper:
         data["id"], data["title"], data["abstract"], paragraphs_list, questions_list
     )
 
+
+# CLI: 논문 한 편의 문단·질문·근거 매핑 통계를 JSON으로 출력
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)

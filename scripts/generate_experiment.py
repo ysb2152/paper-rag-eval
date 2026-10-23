@@ -15,6 +15,8 @@ from src.generate.qwen import MODEL_NAME, generate_answer, load_generator
 from src.ingest.qasper import load_paper
 
 
+# oracle 근거로 7B가 답을 생성해 유형별·전체 평균 F1을 낸다
+
 def run(paths: list[str], max_new_tokens: int = 64) -> dict:
     model, tokenizer = load_generator()
 
@@ -57,6 +59,8 @@ def run(paths: list[str], max_new_tokens: int = 64) -> dict:
         "rows": rows,
     }
 
+
+# CLI: 논문들 받아 oracle 생성 리포트를 JSON으로 출력(선택: --out 저장)
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)

@@ -4,6 +4,8 @@ from src.ingest.qasper import Paragraph
 from src.retrieve.bm25 import search_bm25
 
 
+# search_bm25 — 빈 문단 건너뛰기·동점 원순서·예외 처리
+
 class BM25Tests(unittest.TestCase):
     def setUp(self):
         texts = ["", "seed lexicon", "neural network", "weather forecast", "sports news"]

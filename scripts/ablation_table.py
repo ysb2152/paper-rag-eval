@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 
 
+# 골든 JSON을 읽어 돌려준다. 없거나 비었으면 None
+
 def read_helper(golden_path):
 
     if golden_path.exists():

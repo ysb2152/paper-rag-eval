@@ -1,10 +1,6 @@
-"""Qwen2.5-7B-Instruct로 근거에 기반해 질문에 답한다.
-
-10GB VRAM에 7B를 올리려고 bitsandbytes 4-bit(NF4)로 양자화해 로드한다. 근거 문단만
-근거로 삼아 간결히 답하고, 근거가 답을 담지 못하면 보류('Unanswerable')하도록
-지시한다. 평가 재현을 위해 표본추출 없이 그리디로 디코딩한다. 이미 학습된 가중치로
-답을 생성하는 추론이며 이 데이터로 미세조정하지 않는다.
-"""
+# Qwen2.5-7B-Instruct로 근거에 기반해 질문에 답한다. 10GB VRAM에 7B를 올리려고 bitsandbytes
+# 4-bit(NF4)로 양자화해 로드. 근거 문단만 써서 간결히 답하고, 근거가 답을 못 담으면
+# 'Unanswerable'로 보류하도록 지시한다. 평가 재현을 위해 표본추출 없이 그리디로 디코딩한다.
 
 from threading import Thread
 
@@ -26,6 +22,8 @@ SYSTEM_PROMPT = (
 )
 
 
+# Qwen2.5-7B를 4-bit(NF4)로 양자화해 로드
+
 def load_generator(model_name: str = MODEL_NAME):
     quantization = BitsAndBytesConfig(
         load_in_4bit=True,
@@ -41,6 +39,8 @@ def load_generator(model_name: str = MODEL_NAME):
     return model, tokenizer
 
 
+# 근거 문단과 질문을 system/user 메시지로 조립. 근거 없으면 '(근거 없음)'
+
 def build_messages(question: str, evidence: list[str]) -> list[dict]:
     joined = "\n\n".join(evidence) if evidence else "(근거 없음)"
     user = f"Evidence:\n{joined}\n\nQuestion: {question}"
@@ -49,6 +49,8 @@ def build_messages(question: str, evidence: list[str]) -> list[dict]:
         {"role": "user", "content": user},
     ]
 
+
+# 근거로 답을 생성해 문자열로 돌려준다(그리디 디코딩)
 
 @torch.no_grad()
 def generate_answer(
@@ -67,6 +69,11 @@ def generate_answer(
     return tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
 
 
+# generate_answer와 같은 답을 생성하되 완성까지 기다리지 않고 토큰을 만들어지는 대로
+# 조각 문자열로 yield한다(서빙 실시간 전송용). transformers의 generate는 블로킹이라
+# TextIteratorStreamer에 토큰을 밀어넣고 generate는 별도 스레드에서 돌린다. torch.no_grad()는
+# 스레드 로컬이라 generate를 돌리는 워커 스레드 안에서 다시 감싸야 추론 그래프가 안 쌓인다
+
 def stream_answer(
     question: str,
     evidence: list[str],
@@ -74,14 +81,6 @@ def stream_answer(
     tokenizer,
     max_new_tokens: int = 64,
 ):
-    """generate_answer와 같은 답을 생성하되, 완성될 때까지 기다리지 않고 토큰을
-    만들어지는 대로 조각 문자열로 내보낸다. 서빙에서 답을 실시간으로 흘려보내기 위함이다.
-
-    transformers의 generate는 블로킹이라, TextIteratorStreamer에 생성 토큰을 밀어넣게
-    하고 generate 자체는 별도 스레드에서 돌린다. 이 함수는 스트리머를 순회하며 조각을
-    yield한다. torch.no_grad()는 스레드 로컬이라 generate를 돌리는 워커 스레드 안에서
-    다시 감싸야 추론 그래프가 쌓이지 않는다.
-    """
     prompt = tokenizer.apply_chat_template(
         build_messages(question, evidence), tokenize=False, add_generation_prompt=True
     )

@@ -3,6 +3,8 @@ import string
 from collections import Counter
 from src.ingest.qasper import Answer,Question
 
+# 소문자화·관사 제거·문장부호 제거·공백 정리로 채점용 정규화
+
 def normalize_answer(text:str)->str:
 
     text = text.lower()
@@ -47,6 +49,8 @@ def answer_string(answer: Answer) -> str:
         return "No"
 
     return ""
+
+# 답 유형 분류 — unanswerable/extractive/abstractive/boolean/none
 
 def answer_type(answer: Answer) -> str:
 

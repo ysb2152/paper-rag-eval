@@ -13,9 +13,13 @@ from pathlib import Path
 from src.eval.nli import MODEL_NAME, entailment, load_nli
 
 
+# 답이 보류('Unanswerable')인지 판정
+
 def is_abstention(prediction: str) -> bool:
     return prediction.strip().lower().startswith("unanswerable")
 
+
+# 생성 결과 JSON의 답을 근거에 대해 NLI 채점, 충실율·환각율을 낸다(보류는 제외해 따로 센다)
 
 def run(run_path: str, max_length: int = 512) -> dict:
     report = json.loads(Path(run_path).read_text(encoding="utf-8"))
@@ -57,6 +61,8 @@ def run(run_path: str, max_length: int = 512) -> dict:
         "answers": scored,
     }
 
+
+# CLI: 생성 결과 JSON을 받아 충실성 리포트를 JSON으로 출력(선택: --out 저장)
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)

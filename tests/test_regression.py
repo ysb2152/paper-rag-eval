@@ -3,6 +3,8 @@ import unittest
 from src.eval.regression import find_regression_list
 
 
+# find_regression_list — 하락만 보고·허용치는 초과 비교
+
 class RegressionCompareTests(unittest.TestCase):
     def test_only_drops_are_reported(self):
         gold = {"hit@5": 0.60, "recall": 0.40, "mrr": 0.50}

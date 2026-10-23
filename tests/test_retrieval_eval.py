@@ -6,6 +6,8 @@ from src.ingest.qasper import Answer, Evidence, Paper, Paragraph, Question
 from src.retrieve.bm25 import SearchResult
 
 
+# score_retrieval — recall·rr·첫 정답 순위, 중복·컷오프·예외 처리
+
 class RetrievalMetricsTests(unittest.TestCase):
     def test_partial_recall_and_one_based_rank(self):
         metrics = score_retrieval(["B", "A", "C", "E"], {"A", "C", "E"}, 3)
@@ -28,6 +30,8 @@ class RetrievalMetricsTests(unittest.TestCase):
             with self.subTest(gold=gold, top_k=top_k), self.assertRaises(ValueError):
                 score_retrieval([], gold, top_k)
 
+
+# evaluate_paper — 보류 제외 마이크로 평균, 검색엔 gold 안 넘김
 
 class RetrievalEvaluationTests(unittest.TestCase):
     def setUp(self):

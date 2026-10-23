@@ -17,8 +17,9 @@ import json
 from pathlib import Path
 
 
+# 리스트형 원본 논문을 로더가 읽는 컬럼형 단일 논문으로 바꾼다
+
 def to_single_paper(paper_id: str, paper: dict) -> dict:
-    """리스트형 원본 논문을 로더가 읽는 컬럼형 단일 논문으로 바꾼다."""
     full_text = {
         "section_name": [section["section_name"] for section in paper["full_text"]],
         "paragraphs": [section["paragraphs"] for section in paper["full_text"]],
@@ -43,6 +44,8 @@ def to_single_paper(paper_id: str, paper: dict) -> dict:
     }
 
 
+# 원본에서 등장 순서대로 count편을 컬럼형으로 변환해 개별 파일로 저장
+
 def extract(source: Path, out_dir: Path, count: int) -> list[str]:
     papers = json.loads(source.read_text(encoding="utf-8"))
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -55,6 +58,8 @@ def extract(source: Path, out_dir: Path, count: int) -> list[str]:
         saved.append(paper_id)
     return saved
 
+
+# CLI: 원본 JSON에서 count편 추출해 out-dir에 저장
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)

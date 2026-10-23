@@ -10,15 +10,21 @@ from rank_bm25 import BM25Okapi
 from src.ingest.qasper import Paragraph, load_paper
 
 
+# 검색 결과 한 건 — 문단과 점수
+
 @dataclass
 class SearchResult:
     paragraph: Paragraph
     score: float
 
 
+# 소문자로 바꿔 단어 단위로 토큰화
+
 def tokenize(text:str) -> list[str]:
     return re.findall(r"\w+", text.lower())
 
+
+# 문단들을 BM25로 점수 매겨 top_k를 SearchResult 리스트로 돌려준다
 
 def search_bm25(paragraphs:list[Paragraph], query:str, top_k: int = 5)-> list[SearchResult]:
     if top_k < 1:
@@ -63,6 +69,8 @@ def search_bm25(paragraphs:list[Paragraph], query:str, top_k: int = 5)-> list[Se
 
     return SearchResult_lists
 
+
+# CLI: 논문 JSON·질문 받아 BM25 top_k 결과를 JSON으로 출력
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)

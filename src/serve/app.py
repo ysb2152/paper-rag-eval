@@ -14,6 +14,8 @@ STATIC_DIR = Path(__file__).parent / "static"
 candidate_k=20
 max_length=512
 
+# 서버 기동 때 임베더·리랭커(CPU)와 생성기(GPU)를 한 번 로딩해 상주시킨다
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
 
@@ -24,16 +26,22 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+# /ask 요청 바디 — 논문 경로·질문·근거 수
+
 class AskRequest(BaseModel):
     paper_path: str
     question: str
     evidence_k: int = 5
+
+# /ask 응답 — 답·근거 문단·보류 여부
 
 class AskResponse(BaseModel):
     answer: str
     evidence: list[str]
     abstained: bool
 
+
+# 검색→리랭크→생성으로 답과 근거를 돌려준다. 'Unanswerable'이면 보류
 
 @app.post("/ask", response_model=AskResponse)
 def ask(req: AskRequest):
@@ -57,9 +65,13 @@ def ask(req: AskRequest):
     return AskResponse(answer=answer, evidence=evidence_list,abstained=abstained)
 
 
+# payload를 SSE data 한 줄로 포맷
+
 def sse(payload):
     return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
+
+# /ask와 같은 파이프라인이되 근거·생성 토큰을 SSE로 실시간 전송
 
 @app.post("/ask/stream")
 def ask_stream(req: AskRequest):
@@ -87,6 +99,8 @@ def ask_stream(req: AskRequest):
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
+
+# 정적 데모 페이지 반환
 
 @app.get("/")
 def index():

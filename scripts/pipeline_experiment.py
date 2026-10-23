@@ -22,6 +22,8 @@ from src.retrieve.rerank import load_reranker, rerank
 METHODS = ("dense", "bm25_rerank", "dense_rerank")
 
 
+# 한 질문에 대해 dense 단독·BM25→리랭크·dense→리랭크 세 방식의 top-k·지표를 담은 행을 만든다
+
 def build_row(paper, question, embedder, reranker, candidate_k, top_k, max_length) -> dict:
     emb_model, emb_tok, emb_dev = embedder
     rr_model, rr_tok, rr_dev = reranker
@@ -56,6 +58,8 @@ def build_row(paper, question, embedder, reranker, candidate_k, top_k, max_lengt
     }
 
 
+# 여러 논문의 평가 질문을 모아 세 방식을 마이크로 평균으로 비교한다
+
 def run(paths: list[str], candidate_k: int = 20, top_k: int = 5, max_length: int = 512) -> dict:
     embedder = load_embedder()
     reranker = load_reranker()
@@ -69,6 +73,8 @@ def run(paths: list[str], candidate_k: int = 20, top_k: int = 5, max_length: int
             rows.append(build_row(paper, question, embedder, reranker, candidate_k, top_k, max_length))
 
     count = len(rows)
+
+    # 방식·지표별 평균
 
     def mean(method: str, metric: str):
         return sum(row[method][metric] for row in rows) / count if count else None
@@ -86,6 +92,8 @@ def run(paths: list[str], candidate_k: int = 20, top_k: int = 5, max_length: int
         "questions": rows,
     }
 
+
+# CLI: 세 방식 비교 리포트를 JSON으로 출력(선택: --out 저장)
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)

@@ -22,6 +22,8 @@ from src.retrieve.bm25 import SearchResult
 MODEL_NAME = "BAAI/bge-m3"
 
 
+# bge-m3 임베더 로드. device 미지정이면 cuda 있으면 cuda 없으면 cpu
+
 def load_embedder(model_name: str = MODEL_NAME,device:str=None):
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     # torch 2.5.1은 보안 이슈로 pytorch_model.bin(torch.load)을 거부하므로 safetensors를 쓴다.
@@ -32,6 +34,8 @@ def load_embedder(model_name: str = MODEL_NAME,device:str=None):
     return model, tokenizer, device
 
 
+# 문장 목록을 정규화된 dense 벡터로 바꾼다. 반환은 (문장 수, 차원) 텐서
+
 @torch.no_grad()
 def encode(
     texts: list[str],
@@ -41,7 +45,6 @@ def encode(
     max_length: int = 512,
     batch_size: int = 8,
 ) -> torch.Tensor:
-    """문장 목록을 정규화된 dense 벡터로 바꾼다. 반환은 (문장 수, 차원) 텐서."""
     vectors = []
     for start in range(0, len(texts), batch_size):
         batch = texts[start : start + batch_size]
@@ -57,6 +60,8 @@ def encode(
         vectors.append(cls.cpu())
     return torch.cat(vectors, dim=0)
 
+
+# 문단들을 임베딩해 질문 벡터와 코사인 유사도 top_k를 SearchResult로 돌려준다
 
 def search_embed(
     paragraphs: list[Paragraph],
@@ -90,6 +95,8 @@ def search_embed(
     order = sorted(range(len(documents)), key=lambda i: -scores[i])
     return [SearchResult(documents[i], float(scores[i])) for i in order[:top_k]]
 
+
+# CLI: 논문 JSON·질문 받아 dense top_k 검색 결과를 JSON으로 출력
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)

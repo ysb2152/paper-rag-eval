@@ -1,12 +1,9 @@
-"""생성 모델 축 ablation — 같은 oracle 근거·프롬프트에서 생성 모델만 바꿔 Answer-F1을 비교한다.
+# 생성 모델 축 ablation — 같은 oracle 근거·프롬프트에서 생성 모델만 바꿔 Answer-F1을 비교한다.
+# 검색 오류를 배제하려 gold evidence를 근거로 고정, 프롬프트도 v3로 고정하고 모델만 바꾼다. 요인
+# 하나만 바꿔 "어느 생성 모델이 근거에서 답을 더 잘 뽑나"를 격리해서 본다. 10GB VRAM이라 모델을
+# 하나씩 올려 돌리고 다음 전에 내린다. v3 프롬프트가 Qwen에 맞춰 튜닝된 것이라 타 계열엔 불리할
+# 수 있다 — 통제된 비교를 위해 고정하되 결과 해석의 주의로 남긴다.
 
-검색 오류를 배제하려고 gold evidence(oracle)를 근거로 고정하고, 프롬프트도 v3로 고정한 뒤
-생성 모델만 바꾼다. 요인을 하나만 바꿔 "어느 생성 모델이 근거에서 답을 더 잘 뽑나"를 격리해서 본다.
-10GB VRAM이라 모델을 하나씩 올려 돌리고 다음 모델 전에 내린다.
-
-같은 v3 시스템 프롬프트가 Qwen에 맞춰 튜닝된 것이라 타 계열엔 불리할 수 있다. 통제된 비교를
-위해 프롬프트는 고정하되, 이 점은 결과 해석의 주의로 남긴다.
-"""
 import gc
 from pathlib import Path
 
@@ -28,6 +25,8 @@ MODELS = [
 ]
 
 
+# 모델 하나를 올려 전 질문을 oracle 근거로 생성·채점, 평균 F1과 문항 수를 돌려주고 VRAM을 비운다
+
 def run_model(model_name: str, papers: list[str], max_new_tokens: int = 64):
     model, tokenizer = load_generator(model_name)
     f1s = []
@@ -45,6 +44,8 @@ def run_model(model_name: str, papers: list[str], max_new_tokens: int = 64):
     mean = sum(f1s) / len(f1s) if f1s else None
     return mean, len(f1s)
 
+
+# 모델들을 차례로 돌려 Answer-F1 비교 표를 출력
 
 def main() -> None:
     papers = [str(path) for path in Path("data/papers").glob("*.json")]

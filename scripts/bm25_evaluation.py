@@ -12,6 +12,8 @@ papers=[load_paper("data/papers/"+path.strip()+".json") for path in path_list]
 
 
 
+# 회귀셋 논문들을 BM25로 평가해 질문 전체의 마이크로 평균 지표와 문항 수를 돌려준다
+
 def compute_bm25_metrics():
     evaluated_paper=[]
 

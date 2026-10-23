@@ -4,6 +4,8 @@ import json
 from src.ingest.qasper import Paper, load_paper
 from src.retrieve.bm25 import search_bm25
 
+# 검색 결과를 gold와 대조해 hit·recall·rr·첫 정답 순위를 낸다
+
 def score_retrieval(retrieved_ids, gold_ids, top_k) -> dict:
 
     if top_k<1:
@@ -29,11 +31,15 @@ def score_retrieval(retrieved_ids, gold_ids, top_k) -> dict:
             "first_gold_rank": first_rank
             }
 
+# 질문의 모든 근거에서 첫 매핑 문단 id를 모아 set으로
+
 def gold_paragraph_ids(question) -> set[str]:
     evidence=[item for answer in question.answers for item in answer.evidence]
 
 
     return {item.paragraph_ids[0] for item in evidence}
+
+# 채점에서 보류할 사유들 — 답 1개 아님·보류·근거없음·매핑없음·모호
 
 def deferral_reasons(question) -> list[str]:
     reasons=[]
@@ -61,6 +67,8 @@ def deferral_reasons(question) -> list[str]:
         reasons.append("ambiguous_evidence")
 
     return reasons
+
+# 논문 한 편의 질문들을 BM25로 검색·채점, 보류는 걸러 평균 지표를 낸다
 
 def evaluate_paper(paper: Paper,top_k=5)->dict:
 
@@ -97,6 +105,8 @@ def evaluate_paper(paper: Paper,top_k=5)->dict:
             "mean": mean,
             "evaluated": scored_q,
             "deferred": amb_q}
+
+# CLI: 논문 한 편 평가 리포트를 JSON으로 출력
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)

@@ -14,8 +14,9 @@ from src.eval.answer import answer_f1_detail
 from src.ingest.qasper import Question, load_paper
 
 
+# 모든 주석자 답의 gold 근거 텍스트를 중복 없이 모은다
+
 def oracle_evidence_paragraphs(question: Question) -> list[str]:
-    """모든 주석자 답의 gold 근거 텍스트를 중복 없이 모은다."""
     seen = set()
     parts = []
     for answer in question.answers:
@@ -27,10 +28,13 @@ def oracle_evidence_paragraphs(question: Question) -> list[str]:
     return parts
 
 
+# gold 근거 문단을 하나의 문자열로 이어 붙인다(추출 베이스라인 답)
+
 def oracle_evidence_text(question: Question) -> str:
-    """gold 근거 문단을 하나의 문자열로 이어 붙인다(추출 베이스라인 답)."""
     return " ".join(oracle_evidence_paragraphs(question))
 
+
+# 논문들의 전 질문을 oracle 근거로 채점해 유형별·전체 평균 F1을 낸다
 
 def run(paths: list[str]) -> dict:
     rows = []
@@ -66,6 +70,8 @@ def run(paths: list[str]) -> dict:
         "rows": rows,
     }
 
+
+# CLI: 논문들 받아 리포트를 JSON으로 출력(선택: --out 저장)
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)

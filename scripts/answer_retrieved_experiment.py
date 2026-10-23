@@ -20,11 +20,10 @@ from src.retrieve.embed import load_embedder, search_embed
 from src.retrieve.rerank import load_reranker, rerank
 
 
-def retrieve_evidence(paths, candidate_k, evidence_k, max_length):
-    """검색기로 질문마다 dense→리랭커 top evidence_k 근거 문단을 모은다.
+# 검색기로 질문마다 dense→리랭커 top evidence_k 근거 문단을 모은다. 검색기와 7B를 동시에
+# 올리면 10GB VRAM에 안 맞아, 검색을 먼저 끝내고 모델을 내린다
 
-    검색기와 7B를 동시에 올리면 10GB VRAM에 안 맞아, 검색을 먼저 끝내고 모델을 내린다.
-    """
+def retrieve_evidence(paths, candidate_k, evidence_k, max_length):
     emb_model, emb_tok, emb_dev = load_embedder()
     rr_model, rr_tok, rr_dev = load_reranker()
 
@@ -47,6 +46,8 @@ def retrieve_evidence(paths, candidate_k, evidence_k, max_length):
     torch.cuda.empty_cache()
     return items
 
+
+# 검색 근거로 7B가 답을 생성해 유형별·전체 평균 F1을 낸다
 
 def run(paths: list[str], candidate_k: int = 20, evidence_k: int = 5,
         max_length: int = 512, max_new_tokens: int = 64) -> dict:
@@ -90,6 +91,8 @@ def run(paths: list[str], candidate_k: int = 20, evidence_k: int = 5,
         "rows": rows,
     }
 
+
+# CLI: 논문들 받아 검색 근거 생성 리포트를 JSON으로 출력(선택: --out 저장)
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)

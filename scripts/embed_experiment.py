@@ -16,12 +16,15 @@ from src.retrieve.bm25 import search_bm25
 from src.retrieve.embed import MODEL_NAME, load_embedder, search_embed
 
 
+# 전체 순위에서 첫 gold 근거가 몇 위인지 돌려준다(없으면 None)
+
 def full_gold_rank(retrieved_ids: list[str], gold_ids: set[str]) -> int | None:
-    """전체 순위에서 첫 gold 근거가 몇 위인지 돌려준다(없으면 None)."""
     if not retrieved_ids:
         return None
     return score_retrieval(retrieved_ids, gold_ids, len(retrieved_ids))["first_gold_rank"]
 
+
+# 논문 한 편에서 BM25와 dense를 각각 전체 순위 매겨 Hit/Recall/MRR·gold 순위를 비교한다
 
 def run(path: str, top_k: int = 5, max_length: int = 512) -> dict:
     paper = load_paper(path)
@@ -60,6 +63,8 @@ def run(path: str, top_k: int = 5, max_length: int = 512) -> dict:
 
     count = len(rows)
 
+    # 방식·지표별 평균
+
     def mean(method: str, metric: str):
         return sum(row[method][metric] for row in rows) / count if count else None
 
@@ -77,6 +82,8 @@ def run(path: str, top_k: int = 5, max_length: int = 512) -> dict:
         "questions": rows,
     }
 
+
+# CLI: BM25 vs dense 비교 리포트를 JSON으로 출력(선택: --out 저장)
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)

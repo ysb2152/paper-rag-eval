@@ -16,9 +16,10 @@ from src.retrieve.bm25 import search_bm25
 from src.retrieve.rerank import MODEL_NAME, load_reranker, rerank
 
 
+# max_length 때문에 잘리는 후보가 몇 개인지 센다. 잘림은 리랭커가 문단 뒷부분을
+# 못 봤다는 뜻이라 결과 해석에 필요하다
+
 def count_truncated(tokenizer, query: str, texts: list[str], max_length: int) -> int:
-    """max_length 때문에 잘리는 후보가 몇 개인지 센다. 잘림은 리랭커가 문단 뒷부분을
-    보지 못했다는 뜻이라 결과 해석에 필요하다."""
     truncated = 0
     for text in texts:
         length = len(tokenizer(query, text, truncation=False)["input_ids"])
@@ -26,6 +27,8 @@ def count_truncated(tokenizer, query: str, texts: list[str], max_length: int) ->
             truncated += 1
     return truncated
 
+
+# 같은 BM25 후보에서 기존 top-k와 리랭킹 top-k를 질문마다 비교해 평균 지표를 낸다
 
 def run(path: str, candidate_k: int = 20, top_k: int = 5, max_length: int = 512) -> dict:
     paper = load_paper(path)
@@ -65,6 +68,8 @@ def run(path: str, candidate_k: int = 20, top_k: int = 5, max_length: int = 512)
 
     count = len(rows)
 
+    # 방식·지표별 평균
+
     def mean(method: str, metric: str):
         return sum(row[method][metric] for row in rows) / count if count else None
 
@@ -82,6 +87,8 @@ def run(path: str, candidate_k: int = 20, top_k: int = 5, max_length: int = 512)
         "questions": rows,
     }
 
+
+# CLI: 리랭킹 전후 비교 리포트를 JSON으로 출력(선택: --out 저장)
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
