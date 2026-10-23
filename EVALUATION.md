@@ -4,7 +4,7 @@
 
 ## 평가셋
 
-- **검색 범위(P0-7):** 첫 버전에서는 질문 대상 논문을 입력으로 제공하고 해당 논문의 본문만 검색한다. 관련 논문을 찾는 기능은 첫 버전 완료 후 추가하며, 전체 코퍼스 검색 결과는 별도 평가 조건으로 보고한다.
+- **검색 범위(P0-7):** 첫 버전에서는 질문 대상 논문을 입력으로 제공하고 해당 논문의 본문만 검색한다(아래 검색·답변 평가). 관련 논문을 찾는 기능은 첫 버전 완료 후 추가했고, 전체 코퍼스에서 논문을 고르는 조건은 별도로 보고한다([코퍼스 라우팅 평가](#코퍼스-라우팅-평가-corpus-routing)).
 - **백본:** Qasper (NLP 논문 QA). 질문마다 **gold evidence paragraph** 와 **reference answer** 라벨 보유.
 - **dev / test 분리:** dev(소형, 반복 실험·비용 절감) / held-out test(최종 보고). 크기·분리 방법은 착수 시 확정·기록.
 - **하드웨어:** 로컬 Windows + RTX 3080 (10GB). 임베딩·리랭커·NLI·로컬 생성(7B) 로컬 추론. 채점 백본 무료. Claude 생성/judge 는 비교·검증용(선택).
@@ -244,6 +244,57 @@ _(로컬 NLI 모델 선정·faithfulness 근사 정확도, LLM-judge 프롬프�
 ```powershell
 .\.venv\Scripts\python.exe -m scripts.nli_experiment runs/answer-oracle-qwen-v3.json --out runs/nli-oracle-qwen-v3.json
 .\.venv\Scripts\python.exe -m scripts.nli_experiment runs/answer-retrieved-qwen.json --out runs/nli-retrieved-qwen.json
+```
+
+## 코퍼스 라우팅 평가 (Corpus routing)
+
+P0-7 2단계(코퍼스에서 논문 선택 → 선택 논문 내 QA)의 평가다. 앞의 검색·답변 평가가 "논문이 정해진" 가정이었다면, 여기서는 단일 논문 가정 없이 50편 코퍼스에서 질문 → 논문 → 문단 → 답으로 이어지는 흐름을 측정한다.
+
+### 코퍼스 문단 인덱스 (B-18, 2026-10-22)
+
+- 50편 3011문단(빈 문단 제외)을 `BAAI/bge-m3`로 한 번 임베딩해 디스크에 영속화한다. 벡터 행렬(`vectors.npy`, (3011,1024) float32)과 행↔문단 메타(`meta.json`, id·text·section)로 나누고 행 순서를 맞춘다. 호출마다 재임베딩하던 B-16의 ~18s 지연을 빌드 타임 1회로 옮긴 것.
+- 검색은 정규화 벡터의 전수 내적(FAISS IndexFlatIP와 같은 의미)에 numpy argsort로 top-k. 3011벡터 규모는 정확 탐색이 ms급이라 근사 인덱스(IVF/HNSW)는 아직 불필요하다.
+- sanity: "How big is the seed lexicon used for training?"에 50편 전역에서 정답 문단 `1909.00694:s11:p4`가 1위(내적 0.595). 단일 논문 가정 없이 코퍼스에서 바로 근거를 찾는다.
+- 환경: Windows, Python 3.10.7, RTX 3080 GPU 임베딩. 재생성 `python -m src.index.corpus`. 저장물은 gitignore(`/data/*`).
+
+### B-19. 논문 선택 — 50편에서 top-k 라우팅 recall·MRR (2026-10-23)
+
+- 대상: 50편 전체 질문 196개. gold는 "질문이 속한 원 논문" 1편(Qasper 질문-논문 결속)이다. 문단 검색과 달리 보류(deferral) 필터는 적용하지 않는다 — 논문 선택의 gold는 항상 단일·명확해 모호성 필터가 불필요하다.
+- 방법: B-18 코퍼스 인덱스에서 문단 점수를 **논문별 max로 집계**(D2)해 논문을 순위 매긴다([src/index/corpus.py](src/index/corpus.py)의 `rank_papers`). 정답 논문이 1개뿐이라 recall@k가 "정답 논문 순위 ≤ k"와 동치여서, `score_retrieval`을 질문당 1번(k=전체) 호출해 `first_gold_rank`를 얻고 recall@1/3/5·MRR을 그 순위로 직접 판정했다(중복 검색 없음).
+- 환경: Windows, Python 3.10.7, RTX 3080 GPU(bge-m3 임베딩). 지연 미측정.
+
+| recall@1 | recall@3 | recall@5 | MRR |
+|---|---|---|---|
+| 0.444 | 0.602 | 0.643 | 0.549 |
+
+- recall@3 0.602가 D6에서 사전 등록한 목표(≥0.6)를 막 넘겼다.
+- recall@1 0.444는 top-1 라우팅 작동점의 1단계 성공률로, 아래 3단계 분해에서 ①단계의 천장이 된다 — 질문의 56%가 틀린 논문으로 가면 top-1에서는 그 아래 문단검색·답변이 복구되지 않는다.
+- 원칙: 정답이 단일이면 recall@k는 순위 하나로 환원된다. 순위를 한 번 구해 k별로 비교하면 중복 검색 없이 recall·MRR을 함께 얻는다.
+
+재현은 [paper_selection.py](src/eval/paper_selection.py)의 `evaluate_paper_selection()`로 한다(모듈 `main`은 아래 분해를 출력하므로 recall은 함수를 직접 호출).
+
+### B-20. end-to-end 3단계 조건부 분해 — 어디서 새는가 (2026-10-23)
+
+- 대상: 196문항을 관문마다 조건부로 좁힌다. ① 전체 196 → top-1 라우팅이 gold 논문과 일치하고 채점 가능한(deferral 없는) 47편이 ②로 → ② Hit@5 성공(gold 근거를 top-5에 확보)한 31문항이 ③으로.
+- 방법(방안 1 — 조건부): 각 관문을 **앞 관문이 성공한 부분집합에서만** 측정해 "논문을 틀린 것"과 "논문은 맞췄는데 문단을 못 잡은 것"이 섞이지 않게 한다([src/eval/paper_selection.py](src/eval/paper_selection.py)의 `evaluate_decomposition`).
+  - ② 논문 내 검색: B-18 코퍼스 인덱스를 라우팅된 논문의 문단으로 필터해 그 안에서 dense top-5를 뽑는다([src/index/corpus.py](src/index/corpus.py)의 `within_papers`). 리랭커 없음(dense-only). Hit@5로 집계.
+  - ③ 답변: ②가 잡은 top-5 문단 텍스트를 `Qwen2.5-7B-Instruct`(4-bit NF4, 프롬프트 v3, 그리디)에 넣어 답을 생성하고 Qasper Answer-F1로 잰다(답 축 B-8과 동일 채점).
+- 환경: Windows, Python 3.10.7, RTX 3080. 임베더(bge-m3)와 7B(GPU 4bit)를 함께 상주시켜도 OOM 없음. 지연 미측정.
+
+| 관문 | 측정 | 값 | 표본 |
+|---|---|---|---|
+| ① 라우팅+채점가능 | top-1 = gold 논문 & 보류 없음 | 47/196 (0.240) | 196 |
+| ②\|① 논문 내 검색 | Hit@5 | 0.660 | 47 |
+| ③\|② 답변 | Answer-F1 | 0.483 | 31 |
+
+- ①의 47은 B-19 recall@1(0.444 ≈ 87문항)에서 보류 질문을 뺀 채점 가능분이다. 라우팅은 맞혔지만 gold 근거가 없거나 보류 대상인 질문은 ②③의 분모로 쓸 수 없어 제외한다.
+- ③ Answer-F1 0.483은 라우팅도 검색도 성공한 뒤의 **순수 생성 품질**이다. 근거를 top-5에 확보하고도 ~0.48에 머문다는 건 이 작동점의 병목이 검색이 아니라 생성 자체임을 뜻한다. B-8의 단일 논문 답변 격자(oracle 0.533 → 검색 근거 0.416)를 코퍼스 라우팅까지 확장한 셈이다.
+- ②는 리랭커 없는 dense-only라 하한에 가깝다(단일 논문 모드는 dense→리랭커로 Hit@5 0.692, B-7). ②에 리랭커를 넣으면 올라갈 여지가 있다.
+- 표본이 작아(②47·③31) Answer-F1은 한 문제가 ~3%p를 움직인다. 소표본·dense-only 조건으로 읽는다.
+- 원칙: 다단계 파이프라인의 손실은 각 관문을 앞 관문 성공 부분집합에 조건부로 재야 병목이 분리된다. 전체에서 뭉뚱그리면 어느 단계를 고쳐야 할지 보이지 않는다.
+
+```powershell
+.\.venv\Scripts\python.exe -m src.eval.paper_selection
 ```
 
 ## Ablation
