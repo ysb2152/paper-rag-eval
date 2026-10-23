@@ -9,6 +9,8 @@ VECTORS_PATH = "data/index/vectors.npy"
 META_PATH = "data/index/meta.json"
 
 
+# data/papers 전 논문의 비어있지 않은 문단을 임베딩해 vectors.npy·meta.json으로 영속화
+
 def build():
 
     # text 평탄화
@@ -35,6 +37,8 @@ def build():
     with open(META_PATH,"w",encoding="utf-8") as f:
         json.dump(corpusdict,f,ensure_ascii=False)
 
+# 질문을 임베딩해 코퍼스 전역에서 top-k 문단을 (meta, score)로 돌려준다
+
 def search(query,k=5):
 
     vectors=np.load(VECTORS_PATH)
@@ -52,6 +56,8 @@ def search(query,k=5):
 
     return sortedindex
 
+# 문단 점수를 논문별 max로 집계해 논문을 (논문id, score) 내림차순으로 돌려준다
+
 def rank_papers(query,vectors,meta,model,tokenizer,device):
 
     query_vector = (encode([query], model, tokenizer, device, 512, 8)[0]).numpy()
@@ -66,5 +72,22 @@ def rank_papers(query,vectors,meta,model,tokenizer,device):
     return sortedict
 
 
+# 한 논문의 문단만 추려 질문과의 유사도 top_k를 (문단id, score)로 돌려준다
+
+def within_papers(query,vectors,paper_id,meta,model,tokenizer,device,k=5):
+
+    query_vector = (encode([query], model, tokenizer, device, 512, 8)[0]).numpy()
+    scores = vectors @ query_vector
+    paragraph_list=[]
+
+    for i in range(len(meta)):
+
+        if paper_id==meta[i]["id"].split(":")[0]:
+            paragraph_list.append((meta[i]["id"], float(scores[i])))
+
+
+    paragraph_list=sorted(paragraph_list,key=lambda x: -x[1])
+
+    return paragraph_list[:k]
 
 if __name__ == "__main__": build()
