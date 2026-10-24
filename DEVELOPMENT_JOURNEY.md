@@ -69,7 +69,7 @@
 - **초기 가정(폐기):** 생성·채점을 모두 Claude API 로. → 유일 과금이 채점(LLM-judge)에 몰려 예산 리스크. 또한 LLM-judge 는 채점 기준 자체라 재현성·객관성 약점.
 - **개정 결정:**
   - **정량 채점 백본 = 전부 무료·재현 가능.** 검색은 gold evidence 자동채점(recall@k/MRR/nDCG). 답변 정확도는 **Qasper 공식 Answer-F1**(이 벤치마크의 표준 지표). Faithfulness/환각은 **로컬 NLI 모델**(evidence ⊨ answer 함의)로 근사.
-  - **답변 생성 = 로컬 7B + Claude 를 ablation 축으로.** `Qwen2.5-7B-Instruct`(4-bit, 10GB 상주) vs `claude-sonnet-5` vs `claude-opus-5`. 생성 모델 품질을 측정 대상으로 삼음(컨셉 정합).
+  - **답변 생성 = 로컬 7B(채택) + Claude 를 선택적 ablation 축으로.** `Qwen2.5-7B-Instruct`(4-bit, 10GB 상주) 중심으로 하고, `claude-sonnet-5`/`claude-opus-5`는 여건이 되면 비교하는 선택 축으로 둔다(컨셉 정합).
   - **LLM-as-judge = 선택적 검증 도구.** 소량만 돌려 "judge 점수 vs F1/NLI 상관" 을 보여 judge 신뢰도 검증. Claude Haiku + Batch API 로 ~$10–20. 미실행해도 프로젝트 성립.
 - **근거:** (1) 정량 백본이 무료라 예산 리스크 제거·완전 로컬 재현 가능(포트폴리오 강점). (2) Qasper 는 원래 F1 채점 벤치마크 → 표준 지표가 임시 LLM-judge보다 객관적. (3) Claude 를 "프리미엄 비교 대상"으로 두면 로컬 vs API 트레이드오프를 **측정으로** 보여줄 수 있음.
 - **기각:** 생성·채점 전면 Claude — 예산 리스크 + 채점 객관성 약화. / 채점 전면 로컬 LLM-judge — 7B judge 신뢰도 부족, 표준 F1 대비 이점 없음.
@@ -136,7 +136,7 @@ P0-7 확장부(코퍼스에서 관련 논문을 찾아 그 논문에 질문)를 
 
 - [~] **Week 1 — 데이터 + 베이스라인 검색.** Qasper 적재·청킹·bge-m3 임베딩·FAISS 인덱스·dense 검색. **검색 평가 하네스**(recall@k/MRR/nDCG) → 첫 수치. (보류: dense 검색·recall@k·MRR 완료, FAISS·nDCG는 후속)
 - [x] **W1 중간 단계 — BM25 개발용 평가.** 단일 논문에서 근거 매핑이 명확한 4개 질문의 Hit·Recall·MRR 및 보류 사유 출력(B-3). 전체 평가셋·nDCG는 후속 범위다.
-- [~] **Week 2 — 생성 + 답변 평가.** Claude 인용 기반 생성 · LLM-judge(faithfulness/correctness/hallucination). end-to-end 베이스라인 수치. (보류: 로컬 7B 생성+로컬 NLI로 답변·충실성 평가 완료(B-8·B-9), Claude 생성·LLM-judge는 선택 축으로 후속)
+- [~] **Week 2 — 생성 + 답변 평가.** Claude 인용 기반 생성 · LLM-judge(faithfulness/correctness/hallucination). end-to-end 베이스라인 수치. (로컬 7B 생성+로컬 NLI로 답변·충실성 평가 완료(B-8·B-9); 원안의 Claude 생성·LLM-judge는 P0-3에서 선택 축으로 두고 채택하지 않음)
 - [~] **Week 3 — Ablation + 회귀.** 청킹·임베딩·hybrid·리랭커·top-k·프롬프트 비교표 → best config. **회귀 하네스**(임계값 + CI). (보류: hybrid·리랭커·top-k·프롬프트·생성모델 ablation과 회귀 CI 완료(B-11~B-15, B-22), 청킹·임베딩 대안 ablation은 후속)
 - [x] **W3 중간 단계 — 회귀 하네스 CPU 티어 MVP.** bm25 지표를 골든과 비교해 하락 시 실패(exit 코드), `--update-baseline`로 골든 생성, 골든없음·n_questions 가드, argparse CLI(B-11). dense/rerank(GPU 티어)·GitHub Actions 배선은 후속.
 - [x] **W3 중간 단계 — 회귀 하네스 완성.** GitHub Actions CPU 티어 자동 게이트(push/PR에 unittest+bm25 골든), GPU 티어(dense·dense_rerank) 러너 추가·`--tier` 선택·골든 병합, ablation 표 생성기(B-12). 검색 축 ablation은 완료. 청킹·프롬프트·생성 모델 축 비교표는 Week 3 본 범위로 후속.
@@ -380,7 +380,7 @@ B-8은 생성기를 Qwen2.5-7B 하나로 고정했다. 여기서 생성 모델�
 
 **결과(Answer-F1, oracle): Qwen2.5-7B 0.533 > Llama-3.1-8B 0.499 > Qwen2.5-3B 0.380 > Mistral-7B-v0.3 0.332.** 크기 축은 3B→7B에서 +0.153로 B-8의 7B 채택을 크기로 뒷받침한다. 계열 축은 Qwen이 앞서고 Llama가 근접, Mistral이 처진다.
 
-다만 **v3 프롬프트가 Qwen에 맞춰 튜닝된 것**이라 계열 비교는 Qwen에 유리하다. Mistral은 챗 템플릿이 별도 system 역할을 받지 않아 지시를 `[INST]` 블록에 접어 넣으므로 간결·보류(Unanswerable) 지시를 덜 따랐을 수 있다. 그래서 이 표는 "Qwen이 본질적으로 우월"이 아니라 "이 프롬프트·조건에서 Qwen 최적, Llama 경쟁력, Mistral 격차"로 읽는다. `claude-sonnet-5`/`claude-opus-5` 생성 축(P0-3 선택)은 생성만이면 ~$1로 추정되나 미실행으로 둔다.
+다만 **v3 프롬프트가 Qwen에 맞춰 튜닝된 것**이라 계열 비교는 Qwen에 유리하다. Mistral은 챗 템플릿이 별도 system 역할을 받지 않아 지시를 `[INST]` 블록에 접어 넣으므로 간결·보류(Unanswerable) 지시를 덜 따랐을 수 있다. 그래서 이 표는 "Qwen이 본질적으로 우월"이 아니라 "이 프롬프트·조건에서 Qwen 최적, Llama 경쟁력, Mistral 격차"로 읽는다. `claude-sonnet-5`/`claude-opus-5` 생성 축은 P0-3에서 선택 축으로 두었고 이 비교에는 포함하지 않는다(로컬 모델 간 비교에 집중).
 
 원칙: 프롬프트는 생성 모델 계열에 민감하다. 한 모델에 튜닝한 프롬프트로 여러 계열을 비교하면 그 모델에 치우치므로, 엄밀한 계열 비교는 모델별 프롬프트 적응까지 통제해야 한다.
 
@@ -475,7 +475,6 @@ C-2 로드맵에 열어 둔 "② 리랭커" 항목을 측정했다. B-20의 ②�
 
 - **검색 하네스 보강 — nDCG.** Week 1에 예정했으나 recall@k·MRR까지만 측정했다. 순위 품질을 보는 nDCG는 미측정.
 - **청킹·임베딩 대안 ablation.** Week 3 본 범위였으나 검색 축(config·top-k)까지만 비교했다. 청크 크기·임베딩 모델 대안은 미측정.
-- **생성 모델 Claude 축 + LLM-judge 상관 검증.** P0-3에서 Claude를 (1) 생성 ablation 축, (2) LLM-judge 상관 검증(선택, ~$10–20)으로 뒀으나 둘 다 미실행. 현재 병목이 생성이라 효익은 크지만 비용·예산 판단이 남아 있다.
 - **논문 선택 보류(off-topic 거부).** 코퍼스에 답이 없는 질문을 거부하는 보류는 지금 미도입이고 점수 훅만 남겨 뒀다(P0-7.1).
 - **여러 논문 종합 답변(multi-paper).** 별도 설계·평가가 필요한 P0-7 후속 후보.
 - **공식 dev/test split 평가(다중 주석).** train 미사용 논문으로 작동점 일반화는 확인했다(B-23). Qasper dev/test는 질문당 주석이 여럿이라 다중 주석(max-over-refs) 채점으로 하네스를 고쳐야 공식 수치가 나온다 — 후속.
