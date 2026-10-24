@@ -9,6 +9,8 @@ from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     BitsAndBytesConfig,
+    StoppingCriteria,
+    StoppingCriteriaList,
     TextIteratorStreamer,
 )
 
@@ -72,7 +74,8 @@ def generate_answer(
 # generate_answer와 같은 답을 생성하되 완성까지 기다리지 않고 토큰을 만들어지는 대로
 # 조각 문자열로 yield한다(서빙 실시간 전송용). transformers의 generate는 블로킹이라
 # TextIteratorStreamer에 토큰을 밀어넣고 generate는 별도 스레드에서 돌린다. torch.no_grad()는
-# 스레드 로컬이라 generate를 돌리는 워커 스레드 안에서 다시 감싸야 추론 그래프가 안 쌓인다
+# 스레드 로컬이라 generate를 돌리는 워커 스레드 안에서 다시 감싸야 추론 그래프가 안 쌓인다.
+# stop_event를 주면 클라이언트가 중간에 끊겼을 때 호출부가 이 이벤트를 세워 생성을 조기 종료시킨다
 
 def stream_answer(
     question: str,
@@ -80,6 +83,7 @@ def stream_answer(
     model,
     tokenizer,
     max_new_tokens: int = 64,
+    stop_event=None,
 ):
     prompt = tokenizer.apply_chat_template(
         build_messages(question, evidence), tokenize=False, add_generation_prompt=True
@@ -89,6 +93,13 @@ def stream_answer(
         tokenizer, skip_prompt=True, skip_special_tokens=True
     )
 
+    stopping_criteria = None
+    if stop_event is not None:
+        class StopOnEvent(StoppingCriteria):
+            def __call__(self, input_ids, scores, **kwargs):
+                return stop_event.is_set()
+        stopping_criteria = StoppingCriteriaList([StopOnEvent()])
+
     def run():
         with torch.no_grad():
             model.generate(
@@ -96,6 +107,7 @@ def stream_answer(
                 streamer=streamer,
                 max_new_tokens=max_new_tokens,
                 do_sample=False,
+                stopping_criteria=stopping_criteria,
             )
 
     thread = Thread(target=run)

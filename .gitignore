@@ -1,6 +1,7 @@
 # Data & artifacts
 /data/*
 !/data/papers/
+!/data/qasper-train-first-paper.json
 *.faiss
 *.index
 *.pkl
