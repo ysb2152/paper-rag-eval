@@ -446,6 +446,33 @@ Qwen2.5-7B·oracle 근거·그리디에서 생성 지시(프롬프트)만 바꿔
 .\.venv\Scripts\python.exe -m scripts.regression_runner --tier all
 ```
 
+## held-out 최종 평가 (train 미사용 논문)
+
+본 평가의 모든 수치는 튜닝·측정에 쓴 논문 기준이다(단일 논문 작동점 앞 10편, 코퍼스 앞 50편). 작동점이 한 번도 안 본 논문에 일반화되는지 확인한다.
+
+- **데이터**: Qasper train split에서 튜닝·측정에 쓰지 않은 51~60편(10편). 정석 held-out인 dev/test split은 질문당 주석이 여럿이라 현재 단일 주석 하네스가 전부 보류(`answer_count_not_one`)해 쓰지 못한다(다중 주석 채점은 후속). train 미사용분은 같은 단일 주석이라 위 dev 수치와 같은 척도로 직접 비교된다.
+- **측정**: 코드 변경 없이 기존 스크립트에 held-out 경로만 전달. 검색 [pipeline_experiment](scripts/pipeline_experiment.py), oracle 생성 [generate_experiment](scripts/generate_experiment.py), 검색근거 생성 [answer_retrieved_experiment](scripts/answer_retrieved_experiment.py). 작동점 candidate_k=20·k=5·Qwen2.5-7B(4bit) 동일.
+
+| 축 | dev (참조) | held-out | Δ |
+|---|---|---|---|
+| 검색 dense Hit@5 | 0.615 | 0.591 | −0.024 |
+| 검색 dense→리랭커 Hit@5 | 0.692 | 0.682 | −0.010 |
+| oracle-7B Answer-F1 | 0.533 | 0.528 | −0.005 |
+| 검색근거-7B Answer-F1 (k=5) | 0.416 | 0.368 | −0.048 |
+
+표본: 검색 22문항, 답변 44문항(dev는 26·51).
+
+- 검색(dense→리랭커)과 oracle 생성이 dev와 거의 동일 → 핵심 작동점이 미사용 논문에 유지된다(과적합 신호 없음).
+- 검색근거 F1만 −0.048 낮다. oracle이 거의 같으므로 생성기 일반화가 아니라 held-out 검색이 소폭 덜 잡힌 몫 + 소표본 탓으로 읽는다.
+- 소표본 주의: held-out 22문항에서 bm25→리랭커(Hit@5 0.727)가 dense→리랭커(0.682)를 앞섰으나, dev의 dense_rerank 우위(B-7)를 뒤집을 표본은 아니다.
+
+```powershell
+# held-out 10편 추출(train 51~60) 후 data/papers-heldout/*.json 에 대해:
+.\.venv\Scripts\python.exe -m scripts.pipeline_experiment data/papers-heldout/*.json
+.\.venv\Scripts\python.exe -m scripts.generate_experiment data/papers-heldout/*.json
+.\.venv\Scripts\python.exe -m scripts.answer_retrieved_experiment data/papers-heldout/*.json
+```
+
 ## 비용 로그
 
 | 항목 | 호출 수 | 모델 | 실측 비용 |
