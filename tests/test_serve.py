@@ -3,7 +3,8 @@ from types import SimpleNamespace
 from unittest import mock
 
 # 서버 모듈은 fastapi·torch 등 GPU 티어 의존성을 끌어온다. CPU-only CI에는 이들이 없으므로
-# import가 실패하면 이 파일의 테스트를 통째로 건너뛴다(서버 테스트는 로컬 전체 환경에서 돈다).
+# 의존성이 없어 import가 실패할 때만(ModuleNotFoundError) 이 파일 테스트를 건너뛴다. 서버 코드
+# 자체의 오류(ImportError·문법 오류 등)는 그대로 터뜨려 skip으로 숨기지 않는다.
 try:
     from fastapi import HTTPException
     from pydantic import ValidationError
@@ -19,7 +20,7 @@ try:
         safe_paper,
     )
     HAS_SERVE = True
-except Exception:
+except ModuleNotFoundError:
     HAS_SERVE = False
     app_module = None
 
