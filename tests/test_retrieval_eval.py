@@ -31,7 +31,7 @@ class RetrievalMetricsTests(unittest.TestCase):
                 score_retrieval([], gold, top_k)
 
 
-# evaluate_paper — 보류 제외 마이크로 평균, 검색엔 gold 안 넘김
+# evaluate_paper — 보류 제외 macro 평균, 검색엔 gold 안 넘김
 
 class RetrievalEvaluationTests(unittest.TestCase):
     def setUp(self):

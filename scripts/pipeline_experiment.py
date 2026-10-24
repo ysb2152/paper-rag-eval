@@ -6,7 +6,7 @@
   2) BM25 후보 candidate_k → 리랭킹 top-k
   3) dense 후보 candidate_k → 리랭킹 top-k
 정답 근거는 리랭커 입력에 넣지 않고 채점에만 쓴다. 여러 논문의 평가 질문을 모아
-마이크로 평균한다.
+질문별 지표를 균등 가중한 macro 평균을 낸다.
 """
 
 import argparse
@@ -58,7 +58,7 @@ def build_row(paper, question, embedder, reranker, candidate_k, top_k, max_lengt
     }
 
 
-# 여러 논문의 평가 질문을 모아 세 방식을 마이크로 평균으로 비교한다
+# 여러 논문의 평가 질문을 모아 세 방식을 질문별 macro 평균으로 비교한다
 
 def run(paths: list[str], candidate_k: int = 20, top_k: int = 5, max_length: int = 512) -> dict:
     embedder = load_embedder()

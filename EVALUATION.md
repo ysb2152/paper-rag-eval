@@ -142,7 +142,7 @@ B-3와 동일한 논문·4개 질문·본문 문단·BM25 설정·평가 정책�
 ### B-6. BM25 · dense(bge-m3) · hybrid(RRF) 비교 (2026-09-18)
 
 - 대상: Qasper train 앞 10편에서 보류 규칙(B-3)을 통과한 평가 질문 26개. 체리피킹 없이 원본 등장 순서대로 추출. 개발용 부분집합이며 held-out 최종 평가가 아니다.
-- 방법: 세 방식 모두 논문의 전체 문단을 순위 매기고 top-5로 Hit/Recall/MRR을 집계(마이크로 평균, 질문 26개 균등 가중). dense는 `BAAI/bge-m3`의 CLS 벡터를 L2 정규화해 코사인 유사도로 정렬. hybrid는 BM25·dense 순위를 RRF(1/(k+순위) 합, k=60)로 융합.
+- 방법: 세 방식 모두 논문의 전체 문단을 순위 매기고 top-5로 Hit/Recall/MRR을 집계(질문 26개를 균등 가중한 macro 평균). dense는 `BAAI/bge-m3`의 CLS 벡터를 L2 정규화해 코사인 유사도로 정렬. hybrid는 BM25·dense 순위를 RRF(1/(k+순위) 합, k=60)로 융합.
 - 환경: Windows, Python 3.10.7, torch 2.5.1+cu121, transformers 5.17.0, RTX 3080 GPU 추론. max_length 512. 지연시간 미측정.
 
 | 평균 지표 (26문항) | BM25 | dense | hybrid |
@@ -165,7 +165,7 @@ B-3와 동일한 논문·4개 질문·본문 문단·BM25 설정·평가 정책�
 ### B-7. 1단계 검색기별 리랭킹 파이프라인 비교 (2026-09-18)
 
 - 대상: B-6과 같은 10편 26문항. 개발용 부분집합이며 held-out 최종 평가가 아니다.
-- 방법: 세 방식의 top-5를 마이크로 평균 비교. ⓐ dense 단독, ⓑ BM25 후보 20 → 리랭킹, ⓒ dense 후보 20 → 리랭킹. 정답 근거는 리랭커 입력에서 제외.
+- 방법: 세 방식의 top-5를 질문별 지표의 macro 평균으로 비교. ⓐ dense 단독, ⓑ BM25 후보 20 → 리랭킹, ⓒ dense 후보 20 → 리랭킹. 정답 근거는 리랭커 입력에서 제외.
 - 모델: 검색 `BAAI/bge-m3`, 리랭커 `BAAI/bge-reranker-v2-m3`를 함께 로드. candidate_k 20, max_length 512.
 - 환경: Windows, Python 3.10.7, torch 2.5.1+cu121, transformers 5.17.0, RTX 3080 GPU 추론. 지연시간·VRAM 미측정.
 
@@ -227,18 +227,18 @@ _(로컬 NLI 모델 선정·faithfulness 근사 정확도, LLM-judge 프롬프�
 .\.venv\Scripts\python.exe -m scripts.answer_retrieved_experiment data/papers/*.json --out runs/answer-retrieved-qwen.json
 ```
 
-### B-9. Faithfulness(NLI 충실성·환각율) (2026-09-18)
+### B-9. Faithfulness(NLI 충실성·비함의율) (2026-09-18)
 
 - 대상: B-8과 같은 51문항의 생성 답(oracle 근거 vs 검색 근거). Answer-F1과 독립된 축.
-- 채점: `MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli`로 근거를 전제, 답을 가설로 두고 함의 판정. entailment=충실, neutral/contradiction=환각. 보류(Unanswerable)는 주장을 안 한 것이라 제외. 라벨은 config.id2label로 읽는다.
+- 채점: `MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli`로 근거를 전제, 답을 가설로 두고 함의 판정. entailment=충실, 그 나머지(neutral·contradiction)=비함의로 환각을 근사한다. neutral은 근거에서 함의를 확인하지 못한 경우라 반드시 환각은 아니고, 근거를 이어 붙여 512토큰에서 자르므로 뒤쪽 근거가 잘려 함의가 깨질 수 있다. 그래서 환각이 아니라 비함의율로 적는다. 보류(Unanswerable)는 주장을 안 한 것이라 제외. 라벨은 config.id2label로 읽는다.
 
-| 근거 조건 | 채점된 답 | 보류 제외 | 충실율(entail) | 환각율 | 모순율 |
+| 근거 조건 | 채점된 답 | 보류 제외 | 충실율(entail) | 비함의율 | 모순율 |
 |---|---|---|---|---|---|
 | oracle | 36 | 15 | **0.778** | 0.222 | 0.056 |
 | 검색(dense→리랭커 top-5) | 39 | 12 | 0.615 | **0.385** | 0.103 |
 
-- 검색 노이즈는 정확도(Answer-F1 0.533→0.416, B-8)뿐 아니라 충실성(0.778→0.615, 환각 0.222→0.385)도 깎는다. 검색이 무관한 문단을 주면 모델이 근거에 없는 말을 답에 넣어 함의가 깨진다.
-- oracle도 환각 0.222로 완전하지 않다(사전지식 혼입·서술형/수치 답에 대한 NLI 한계·재구성 표현). NLI는 근사 렌즈이므로 절대값보다 oracle 대비 검색의 상대 격차를 신뢰 신호로 본다.
+- 검색 노이즈는 정확도(Answer-F1 0.533→0.416, B-8)뿐 아니라 충실성(0.778→0.615, 비함의 0.222→0.385)도 깎는다. 검색이 무관한 문단을 주면 모델이 근거에 없는 말을 답에 넣어 함의가 깨진다.
+- oracle도 비함의 0.222로 완전하지 않은데, 순수 환각이라기보다 사전지식 혼입·서술형/수치 답에 대한 NLI 한계·재구성 표현이 섞인 값이다. NLI는 근사 렌즈이므로 절대값보다 oracle 대비 검색의 상대 격차를 신뢰 신호로 본다.
 - 정확도(F1)와 충실성(NLI)은 직교하는 두 축이라 함께 봐야 "근거 없이 맞힘"과 "근거대로인데 표현 달라 손해"를 구분한다.
 
 ```powershell
@@ -340,7 +340,7 @@ P0-7 2단계(코퍼스에서 논문 선택 → 선택 논문 내 QA)의 평가�
 
 ### 검색 축 — 회귀 골든 기준 (2026-10-13)
 
-`baselines/retrieval.json`에 커밋된 회귀 골든에서 config별 검색 지표를 뽑은 표. 수치 출처가 회귀 기준선이라 재실행마다 동일하며 `scripts/ablation_table.py`로 재생성한다. 10편 26문항 마이크로 평균(dense·리랭커는 RTX 3080 GPU 티어, 로컬 수동).
+`baselines/retrieval.json`에 커밋된 회귀 골든에서 config별 검색 지표를 뽑은 표. 수치 출처가 회귀 기준선이라 재실행마다 동일하며 `scripts/ablation_table.py`로 재생성한다. 10편 26문항 macro 평균(dense·리랭커는 RTX 3080 GPU 티어, 로컬 수동).
 
 | config | Hit@5 | Recall@5 | MRR@5 |
 |---|---|---|---|
@@ -356,7 +356,7 @@ P0-7 2단계(코퍼스에서 논문 선택 → 선택 논문 내 QA)의 평가�
 
 ### top-k 축 — 검색 지표의 k 의존성 (2026-10-16)
 
-candidate_k(리랭커 후보 풀)를 20으로 고정하고 top_k만 3·5·10으로 바꿔 [파이프라인 실험](scripts/pipeline_experiment.py)을 돌린 마이크로 평균(10편 26문항, RTX 3080 GPU 로컬). `scripts/topk_sweep.py`로 재생성한다. k=5 행은 회귀 골든과 동일(dense 0.615/0.558/0.404, dense_rerank 0.692/0.577/0.461)해 스윕 경로의 일관성을 확인했다.
+candidate_k(리랭커 후보 풀)를 20으로 고정하고 top_k만 3·5·10으로 바꿔 [파이프라인 실험](scripts/pipeline_experiment.py)을 돌린 macro 평균(10편 26문항, RTX 3080 GPU 로컬). `scripts/topk_sweep.py`로 재생성한다. k=5 행은 회귀 골든과 동일(dense 0.615/0.558/0.404, dense_rerank 0.692/0.577/0.461)해 스윕 경로의 일관성을 확인했다.
 
 | k | config | Hit@k | Recall@k | MRR |
 |---|---|---|---|---|
