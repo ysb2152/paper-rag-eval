@@ -1,9 +1,10 @@
 from pathlib import Path
-from src.ingest.qasper import load_paper
+from src.ingest.qasper import load_paper, Paragraph
 import json
 import numpy as np
 from src.index.corpus import rank_papers, VECTORS_PATH, META_PATH, within_papers
 from src.retrieve.embed import load_embedder
+from src.retrieve.rerank import load_reranker, rerank
 from src.eval.retrieval import score_retrieval,deferral_reasons,gold_paragraph_ids
 from src.generate.qwen import load_generator,generate_answer
 from src.eval.answer import answer_f1
@@ -119,6 +120,46 @@ def evaluate_decomposition():
             "generated": f1_count,
             "answer_f1": f1_sum/f1_count if f1_count else None
             }
+
+# ② 리랭커 ablation — 라우팅 통과분에서 논문 내 dense top-5 vs dense top-N→리랭커 top-5 의 Hit@5
+
+def evaluate_within_reranker(candidate_k=20):
+
+    vectors = np.load(VECTORS_PATH)
+    meta = json.load(open(META_PATH, encoding="utf-8"))
+    model, tokenizer, device = load_embedder()
+    rr_model, rr_tok, rr_dev = load_reranker()
+    subset = build_routed_subset(vectors, meta, model, tokenizer, device)
+    id_to_meta = {m["id"]: m for m in meta}
+    dense_hit, rerank_hit = 0, 0
+    # 같은 질문에 대한 dense·리랭커 적중을 쌍으로 세어 노이즈인지 보는 2×2 (McNemar)
+    both, dense_only, rerank_only, neither = 0, 0, 0, 0
+
+    for text, gold_paper_id, gold_paragraph_id, question in subset:
+
+        ranked = within_papers(text, vectors, gold_paper_id, meta, model, tokenizer, device, candidate_k)
+        candidate_ids = [pid for pid, _ in ranked]
+
+        d_hit = score_retrieval(candidate_ids[:5], gold_paragraph_id, 5)["hit"]
+        dense_hit += d_hit
+
+        candidates = [Paragraph(pid, id_to_meta[pid]["section"], 0, 0, id_to_meta[pid]["text"]) for pid in candidate_ids]
+        reranked = rerank(text, candidates, rr_model, rr_tok, rr_dev, 5)
+        rerank_ids = [r.paragraph.id for r in reranked]
+        r_hit = score_retrieval(rerank_ids, gold_paragraph_id, 5)["hit"]
+        rerank_hit += r_hit
+
+        if d_hit and r_hit: both += 1
+        elif d_hit: dense_only += 1
+        elif r_hit: rerank_only += 1
+        else: neither += 1
+
+    n = len(subset)
+
+    return {"n": n, "candidate_k": candidate_k,
+            "dense_hit@5": dense_hit / n,
+            "rerank_hit@5": rerank_hit / n,
+            "both": both, "dense_only": dense_only, "rerank_only": rerank_only, "neither": neither}
 
 # CLI: 분해 결과를 JSON으로 출력
 
