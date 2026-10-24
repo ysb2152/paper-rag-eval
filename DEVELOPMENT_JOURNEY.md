@@ -133,15 +133,15 @@ P0-7 확장부(코퍼스에서 관련 논문을 찾아 그 논문에 질문)를 
 
 아래 Week 1~4는 단일 논문 QA 첫 버전 범위에 적용한다(P0-7).
 
-- [ ] **Week 1 — 데이터 + 베이스라인 검색.** Qasper 적재·청킹·bge-m3 임베딩·FAISS 인덱스·dense 검색. **검색 평가 하네스**(recall@k/MRR/nDCG) → 첫 수치.
+- [~] **Week 1 — 데이터 + 베이스라인 검색.** Qasper 적재·청킹·bge-m3 임베딩·FAISS 인덱스·dense 검색. **검색 평가 하네스**(recall@k/MRR/nDCG) → 첫 수치. (보류: dense 검색·recall@k·MRR 완료, FAISS·nDCG는 후속)
 - [x] **W1 중간 단계 — BM25 개발용 평가.** 단일 논문에서 근거 매핑이 명확한 4개 질문의 Hit·Recall·MRR 및 보류 사유 출력(B-3). 전체 평가셋·nDCG는 후속 범위다.
-- [ ] **Week 2 — 생성 + 답변 평가.** Claude 인용 기반 생성 · LLM-judge(faithfulness/correctness/hallucination). end-to-end 베이스라인 수치.
-- [ ] **Week 3 — Ablation + 회귀.** 청킹·임베딩·hybrid·리랭커·top-k·프롬프트 비교표 → best config. **회귀 하네스**(임계값 + CI).
+- [~] **Week 2 — 생성 + 답변 평가.** Claude 인용 기반 생성 · LLM-judge(faithfulness/correctness/hallucination). end-to-end 베이스라인 수치. (보류: 로컬 7B 생성+로컬 NLI로 답변·충실성 평가 완료(B-8·B-9), Claude 생성·LLM-judge는 선택 축으로 후속)
+- [~] **Week 3 — Ablation + 회귀.** 청킹·임베딩·hybrid·리랭커·top-k·프롬프트 비교표 → best config. **회귀 하네스**(임계값 + CI). (보류: hybrid·리랭커·top-k·프롬프트·생성모델 ablation과 회귀 CI 완료(B-11~B-15, B-22), 청킹·임베딩 대안 ablation은 후속)
 - [x] **W3 중간 단계 — 회귀 하네스 CPU 티어 MVP.** bm25 지표를 골든과 비교해 하락 시 실패(exit 코드), `--update-baseline`로 골든 생성, 골든없음·n_questions 가드, argparse CLI(B-11). dense/rerank(GPU 티어)·GitHub Actions 배선은 후속.
 - [x] **W3 중간 단계 — 회귀 하네스 완성.** GitHub Actions CPU 티어 자동 게이트(push/PR에 unittest+bm25 골든), GPU 티어(dense·dense_rerank) 러너 추가·`--tier` 선택·골든 병합, ablation 표 생성기(B-12). 검색 축 ablation은 완료. 청킹·프롬프트·생성 모델 축 비교표는 Week 3 본 범위로 후속.
 - [x] **W3 중간 단계 — top-k 스윕 + ablation 축 정리.** candidate_k 고정, top-k 3/5/10 스윕으로 검색 지표의 k 의존성 측정(MRR 둔감·recall 단조, 작동점 k는 답 축 미측정이라 k=5 보류). 프롬프트·생성 모델 축 표를 EVALUATION Ablation 절로 승격·결정 ID 부여(B-13). 청킹·임베딩 대안·생성 모델(Claude) 축은 후속.
 - [x] **W3 보강 — 답 축 top-k 측정.** evidence_k 3/5/10에서 Answer-F1을 측정해 B-13의 보류 k 결정을 실측 확정. 비단조로 k=5 최대(k=10은 노이즈로 하락) → 작동점 k=5(B-15).
-- [ ] **Week 4 — 서빙 + 마감.** FastAPI + 최소 UI(스트리밍+인용) · 데모 GIF · 문서 마감.
+- [x] **Week 4 — 서빙 + 마감.** FastAPI + 최소 UI(스트리밍+인용) · 데모 GIF · 문서 마감.
 - [x] **W4 중간 단계 — FastAPI 서빙 + 데모.** `/ask` 엔드포인트(검색→7B 생성→보류)와 lifespan 기동 1회 로딩, 경량 모델 CPU + 7B GPU 4bit 상주로 10GB VRAM 제약 해결. Swagger `/docs` 수동 확인·데모 GIF(B-14). 스트리밍 응답·전용 UI는 B-16에서 추가.
 - [x] **W4 중간 단계 — 스트리밍 + 전용 UI.** `/ask/stream`(SSE)로 생성 토큰을 실시간 전송(TextIteratorStreamer+워커 스레드)하고 자체완결 웹 UI(질문·답 스트림·인용·보류 배지)를 루트로 서빙. 기존 `/ask`는 유지. 첫 토큰까지 ~20초는 CPU 검색 선행 단계 탓이며 인덱스 캐싱은 후속(B-16).
 - [x] **첫 버전 완료 후 — 관련 논문 검색(P0-7 확장 완료).** 50편 3011문단 코퍼스 인덱스 1회 구축(B-18), 문단 점수 논문별 max 집계로 top-1 라우팅·recall@k/MRR 측정(B-19), end-to-end 3단계 조건부 분해로 병목(생성) 특정(B-20), `/ask/corpus`·UI 모드 토글 서빙(B-21). 검색 범위가 달라진 평가는 [EVALUATION 코퍼스 라우팅 평가](EVALUATION.md)에 첫 버전과 분리해 기록했다. 여러 논문 종합 답변은 후속 후보.
