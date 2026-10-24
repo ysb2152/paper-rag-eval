@@ -101,7 +101,7 @@ python -m venv .venv
 
 ![아키텍처 — 런타임 파이프라인과 평가 하네스](docs/architecture.svg)
 
-런타임은 논문과 질문을 받아 검색(dense bge-m3) → 리랭커(bge-reranker-v2-m3) → 생성(Qwen2.5-7B)으로 답과 인용을 내고, 근거가 부족하면 보류한다. 코퍼스 모드는 이 파이프라인 앞에 논문 라우팅(코퍼스 인덱스 → top-1) 한 단계를 더해 같은 검색·생성 코어를 재사용한다(위 다이어그램은 논문이 정해진 런타임 기준). 평가 하네스는 각 단계를 gold evidence·reference answer·NLI로 측정하고, ablation과 회귀 골든(CI)으로 지표 하락을 막는다.
+런타임은 논문과 질문을 받아 검색(dense bge-m3) → 리랭커(bge-reranker-v2-m3) → 생성(Qwen2.5-7B)으로 답과 인용을 내고, 근거가 부족하면 보류한다. 코퍼스 모드는 이 파이프라인 앞에 논문 라우팅(코퍼스 인덱스 → top-1) 한 단계를 더해 같은 검색·생성 코어를 재사용한다(다이어그램 상단의 코퍼스 모드 경로). 평가 하네스는 각 단계를 gold evidence·reference answer·NLI로 측정하고, ablation과 회귀 골든(CI)으로 지표 하락을 막는다.
 
 ## 문서
 

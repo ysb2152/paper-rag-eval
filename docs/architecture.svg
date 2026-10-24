@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 440" width="960" font-family="'Segoe UI','Malgun Gothic',Helvetica,Arial,sans-serif" role="img" aria-label="paper-rag-eval 아키텍처: 런타임 파이프라인과 평가 하네스">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 500" width="960" font-family="'Segoe UI','Malgun Gothic',Helvetica,Arial,sans-serif" role="img" aria-label="paper-rag-eval 아키텍처: 런타임 파이프라인(단일·코퍼스 모드)과 평가 하네스">
   <defs>
     <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
       <path d="M2 1L8 5L2 9" fill="none" stroke="#7a8699" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -8,82 +8,105 @@
     </marker>
   </defs>
 
-  <rect x="20" y="36" width="920" height="132" rx="14" fill="#fafbfe" stroke="#c7d2e8" stroke-width="1"/>
-  <text x="40" y="60" font-size="13" font-weight="600" fill="#3b6fb5">런타임 — FastAPI /ask 서빙</text>
+  <rect x="20" y="30" width="920" height="200" rx="14" fill="#fafbfe" stroke="#c7d2e8" stroke-width="1"/>
+  <text x="40" y="54" font-size="13" font-weight="600" fill="#3b6fb5">런타임 — FastAPI 서빙 (/ask 단일 · /ask/corpus 코퍼스)</text>
+
+  <text x="44" y="76" font-size="11" fill="#6a7383">코퍼스 모드 · 논문 미지정 질문</text>
 
   <g>
-    <rect x="40" y="90" width="150" height="58" rx="9" fill="#f1efe8" stroke="#a8a79d" stroke-width="1"/>
-    <text x="115" y="116" font-size="14" font-weight="600" fill="#2c2c2a" text-anchor="middle">논문 + 질문</text>
-    <text x="115" y="134" font-size="12" fill="#5f5e5a" text-anchor="middle">Qasper 문단</text>
+    <rect x="44" y="82" width="92" height="44" rx="9" fill="#f1efe8" stroke="#a8a79d" stroke-width="1"/>
+    <text x="90" y="109" font-size="13" font-weight="600" fill="#2c2c2a" text-anchor="middle">질문만</text>
   </g>
-  <line x1="190" y1="119" x2="211" y2="119" stroke="#7a8699" stroke-width="1.5" marker-end="url(#ah)"/>
+  <line x1="136" y1="104" x2="156" y2="104" stroke="#7a8699" stroke-width="1.5" marker-end="url(#ah)"/>
 
   <g>
-    <rect x="213" y="90" width="150" height="58" rx="9" fill="#e8eefc" stroke="#3b6fb5" stroke-width="1"/>
-    <text x="288" y="116" font-size="14" font-weight="600" fill="#16335c" text-anchor="middle">검색</text>
-    <text x="288" y="134" font-size="12" fill="#2f5486" text-anchor="middle">dense · bge-m3</text>
+    <rect x="158" y="82" width="176" height="44" rx="9" fill="#e8eefc" stroke="#3b6fb5" stroke-width="1"/>
+    <text x="246" y="102" font-size="13" font-weight="600" fill="#16335c" text-anchor="middle">코퍼스 인덱스</text>
+    <text x="246" y="117" font-size="11" fill="#2f5486" text-anchor="middle">50편 · 3011문단</text>
   </g>
-  <line x1="363" y1="119" x2="384" y2="119" stroke="#7a8699" stroke-width="1.5" marker-end="url(#ah)"/>
+  <line x1="334" y1="104" x2="354" y2="104" stroke="#7a8699" stroke-width="1.5" marker-end="url(#ah)"/>
 
   <g>
-    <rect x="386" y="90" width="192" height="58" rx="9" fill="#e8eefc" stroke="#3b6fb5" stroke-width="1"/>
-    <text x="482" y="116" font-size="14" font-weight="600" fill="#16335c" text-anchor="middle">리랭커 → top-k 근거</text>
-    <text x="482" y="134" font-size="12" fill="#2f5486" text-anchor="middle">bge-reranker-v2-m3</text>
-  </g>
-  <line x1="578" y1="119" x2="599" y2="119" stroke="#7a8699" stroke-width="1.5" marker-end="url(#ah)"/>
-
-  <g>
-    <rect x="601" y="90" width="150" height="58" rx="9" fill="#e8eefc" stroke="#3b6fb5" stroke-width="1"/>
-    <text x="676" y="116" font-size="14" font-weight="600" fill="#16335c" text-anchor="middle">생성</text>
-    <text x="676" y="134" font-size="12" fill="#2f5486" text-anchor="middle">Qwen2.5-7B (4bit)</text>
-  </g>
-  <line x1="751" y1="119" x2="772" y2="119" stroke="#7a8699" stroke-width="1.5" marker-end="url(#ah)"/>
-
-  <g>
-    <rect x="774" y="90" width="150" height="58" rx="9" fill="#e8eefc" stroke="#3b6fb5" stroke-width="1"/>
-    <text x="849" y="116" font-size="14" font-weight="600" fill="#16335c" text-anchor="middle">답 + 인용</text>
-    <text x="849" y="134" font-size="12" fill="#2f5486" text-anchor="middle">근거 부족 시 보류</text>
+    <rect x="356" y="82" width="168" height="44" rx="9" fill="#e8eefc" stroke="#3b6fb5" stroke-width="1"/>
+    <text x="440" y="108" font-size="13" font-weight="600" fill="#16335c" text-anchor="middle">논문 top-1 라우팅</text>
   </g>
 
-  <rect x="20" y="214" width="920" height="206" rx="14" fill="#fafdfc" stroke="#bfe3d7" stroke-width="1" stroke-dasharray="6 4"/>
-  <text x="40" y="238" font-size="13" font-weight="600" fill="#1d9e75">평가 하네스 — 측정 · 진단 · 회귀 (1급 시민)</text>
-
-  <line x1="288" y1="148" x2="210" y2="258" stroke="#9aa3b2" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#ahd)"/>
-  <line x1="822" y1="148" x2="650" y2="258" stroke="#9aa3b2" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#ahd)"/>
-  <line x1="872" y1="148" x2="835" y2="258" stroke="#9aa3b2" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#ahd)"/>
+  <path d="M440 126 L440 140 L115 140 L115 150" fill="none" stroke="#7a8699" stroke-width="1.5" marker-end="url(#ah)"/>
+  <text x="275" y="137" font-size="10" fill="#6a7383" text-anchor="middle">라우팅된 논문</text>
 
   <g>
-    <rect x="212" y="186" width="72" height="18" rx="9" fill="#eef1f6" stroke="#d3d7df" stroke-width="0.8"/>
-    <text x="248" y="199" font-size="11" fill="#44464d" text-anchor="middle">정답 근거</text>
+    <rect x="40" y="150" width="150" height="58" rx="9" fill="#f1efe8" stroke="#a8a79d" stroke-width="1"/>
+    <text x="115" y="176" font-size="14" font-weight="600" fill="#2c2c2a" text-anchor="middle">논문 + 질문</text>
+    <text x="115" y="194" font-size="12" fill="#5f5e5a" text-anchor="middle">논문 지정 또는 라우팅</text>
+  </g>
+  <line x1="190" y1="179" x2="211" y2="179" stroke="#7a8699" stroke-width="1.5" marker-end="url(#ah)"/>
+
+  <g>
+    <rect x="213" y="150" width="150" height="58" rx="9" fill="#e8eefc" stroke="#3b6fb5" stroke-width="1"/>
+    <text x="288" y="176" font-size="14" font-weight="600" fill="#16335c" text-anchor="middle">검색</text>
+    <text x="288" y="194" font-size="12" fill="#2f5486" text-anchor="middle">dense · bge-m3</text>
+  </g>
+  <line x1="363" y1="179" x2="384" y2="179" stroke="#7a8699" stroke-width="1.5" marker-end="url(#ah)"/>
+
+  <g>
+    <rect x="386" y="150" width="192" height="58" rx="9" fill="#e8eefc" stroke="#3b6fb5" stroke-width="1"/>
+    <text x="482" y="176" font-size="14" font-weight="600" fill="#16335c" text-anchor="middle">리랭커 → top-k 근거</text>
+    <text x="482" y="194" font-size="12" fill="#2f5486" text-anchor="middle">bge-reranker-v2-m3</text>
+  </g>
+  <line x1="578" y1="179" x2="599" y2="179" stroke="#7a8699" stroke-width="1.5" marker-end="url(#ah)"/>
+
+  <g>
+    <rect x="601" y="150" width="150" height="58" rx="9" fill="#e8eefc" stroke="#3b6fb5" stroke-width="1"/>
+    <text x="676" y="176" font-size="14" font-weight="600" fill="#16335c" text-anchor="middle">생성</text>
+    <text x="676" y="194" font-size="12" fill="#2f5486" text-anchor="middle">Qwen2.5-7B (4bit)</text>
+  </g>
+  <line x1="751" y1="179" x2="772" y2="179" stroke="#7a8699" stroke-width="1.5" marker-end="url(#ah)"/>
+
+  <g>
+    <rect x="774" y="150" width="150" height="58" rx="9" fill="#e8eefc" stroke="#3b6fb5" stroke-width="1"/>
+    <text x="849" y="176" font-size="14" font-weight="600" fill="#16335c" text-anchor="middle">답 + 인용</text>
+    <text x="849" y="194" font-size="12" fill="#2f5486" text-anchor="middle">근거 부족 시 보류</text>
+  </g>
+
+  <rect x="20" y="262" width="920" height="206" rx="14" fill="#fafdfc" stroke="#bfe3d7" stroke-width="1" stroke-dasharray="6 4"/>
+  <text x="40" y="286" font-size="13" font-weight="600" fill="#1d9e75">평가 하네스 — 측정 · 진단 · 회귀</text>
+
+  <line x1="288" y1="208" x2="210" y2="306" stroke="#9aa3b2" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#ahd)"/>
+  <line x1="822" y1="208" x2="650" y2="306" stroke="#9aa3b2" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#ahd)"/>
+  <line x1="872" y1="208" x2="835" y2="306" stroke="#9aa3b2" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#ahd)"/>
+
+  <g>
+    <rect x="212" y="232" width="72" height="18" rx="9" fill="#eef1f6" stroke="#d3d7df" stroke-width="0.8"/>
+    <text x="248" y="245" font-size="11" fill="#44464d" text-anchor="middle">정답 근거</text>
   </g>
   <g>
-    <rect x="686" y="188" width="72" height="18" rx="9" fill="#eef1f6" stroke="#d3d7df" stroke-width="0.8"/>
-    <text x="722" y="201" font-size="11" fill="#44464d" text-anchor="middle">참조 답안</text>
+    <rect x="686" y="234" width="72" height="18" rx="9" fill="#eef1f6" stroke="#d3d7df" stroke-width="0.8"/>
+    <text x="722" y="247" font-size="11" fill="#44464d" text-anchor="middle">참조 답안</text>
   </g>
   <g>
-    <rect x="828" y="218" width="68" height="18" rx="9" fill="#eef1f6" stroke="#d3d7df" stroke-width="0.8"/>
-    <text x="862" y="231" font-size="11" fill="#44464d" text-anchor="middle">근거 ⊨ 답</text>
+    <rect x="828" y="236" width="68" height="18" rx="9" fill="#eef1f6" stroke="#d3d7df" stroke-width="0.8"/>
+    <text x="862" y="249" font-size="11" fill="#44464d" text-anchor="middle">근거 ⊨ 답</text>
   </g>
 
   <g>
-    <rect x="120" y="260" width="180" height="60" rx="9" fill="#e3f3ee" stroke="#1d9e75" stroke-width="1"/>
-    <text x="210" y="286" font-size="14" font-weight="600" fill="#0b4a39" text-anchor="middle">검색 평가</text>
-    <text x="210" y="304" font-size="12" fill="#0f6e56" text-anchor="middle">Recall@k · MRR</text>
+    <rect x="120" y="308" width="180" height="60" rx="9" fill="#e3f3ee" stroke="#1d9e75" stroke-width="1"/>
+    <text x="210" y="334" font-size="14" font-weight="600" fill="#0b4a39" text-anchor="middle">검색 평가</text>
+    <text x="210" y="352" font-size="12" fill="#0f6e56" text-anchor="middle">Recall@k · MRR</text>
   </g>
   <g>
-    <rect x="560" y="260" width="180" height="60" rx="9" fill="#e3f3ee" stroke="#1d9e75" stroke-width="1"/>
-    <text x="650" y="286" font-size="14" font-weight="600" fill="#0b4a39" text-anchor="middle">답변 평가</text>
-    <text x="650" y="304" font-size="12" fill="#0f6e56" text-anchor="middle">Qasper Answer-F1</text>
+    <rect x="560" y="308" width="180" height="60" rx="9" fill="#e3f3ee" stroke="#1d9e75" stroke-width="1"/>
+    <text x="650" y="334" font-size="14" font-weight="600" fill="#0b4a39" text-anchor="middle">답변 평가</text>
+    <text x="650" y="352" font-size="12" fill="#0f6e56" text-anchor="middle">Qasper Answer-F1</text>
   </g>
   <g>
-    <rect x="745" y="260" width="180" height="60" rx="9" fill="#e3f3ee" stroke="#1d9e75" stroke-width="1"/>
-    <text x="835" y="286" font-size="14" font-weight="600" fill="#0b4a39" text-anchor="middle">충실성</text>
-    <text x="835" y="304" font-size="12" fill="#0f6e56" text-anchor="middle">로컬 NLI · 환각율</text>
+    <rect x="745" y="308" width="180" height="60" rx="9" fill="#e3f3ee" stroke="#1d9e75" stroke-width="1"/>
+    <text x="835" y="334" font-size="14" font-weight="600" fill="#0b4a39" text-anchor="middle">충실성</text>
+    <text x="835" y="352" font-size="12" fill="#0f6e56" text-anchor="middle">로컬 NLI · 환각율</text>
   </g>
 
   <g>
-    <rect x="170" y="350" width="620" height="52" rx="9" fill="#f1efe8" stroke="#a8a79d" stroke-width="1"/>
-    <text x="480" y="374" font-size="13" font-weight="600" fill="#2c2c2a" text-anchor="middle">ablation 표 · 회귀 골든 + CI</text>
-    <text x="480" y="392" font-size="12" fill="#5f5e5a" text-anchor="middle">top-k·프롬프트·생성모델 비교 + 지표 하락 자동 차단</text>
+    <rect x="170" y="398" width="620" height="52" rx="9" fill="#f1efe8" stroke="#a8a79d" stroke-width="1"/>
+    <text x="480" y="422" font-size="13" font-weight="600" fill="#2c2c2a" text-anchor="middle">ablation 표 · 회귀 골든 + CI</text>
+    <text x="480" y="440" font-size="12" fill="#5f5e5a" text-anchor="middle">top-k·프롬프트·생성모델 비교 + 지표 하락 자동 차단</text>
   </g>
 </svg>
