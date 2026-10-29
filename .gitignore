@@ -34,5 +34,9 @@ Thumbs.db
 .idea/
 .claude/
 
+# 로컬 전용 설정 문서
+/AGENTS.md
+/CLAUDE.md
+
 # Local learning notes (not for publication)
 /local-notes/
