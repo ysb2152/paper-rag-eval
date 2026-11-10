@@ -3,7 +3,7 @@
 # 'Unanswerable'로 보류하도록 지시한다. 평가 재현을 위해 표본추출 없이 그리디로 디코딩한다.
 
 from threading import Thread
-
+from src.generate.prompt import SYSTEM_PROMPT,build_messages
 import torch
 from transformers import (
     AutoModelForCausalLM,
@@ -15,13 +15,6 @@ from transformers import (
 )
 
 MODEL_NAME = "Qwen/Qwen2.5-7B-Instruct"
-
-SYSTEM_PROMPT = (
-    "You answer questions about a scientific paper using only the provided evidence. "
-    "Answer concisely with a short phrase or a single sentence, not a paragraph. "
-    "For yes/no questions, answer 'Yes' or 'No'. "
-    "If the evidence does not contain the answer, reply exactly with 'Unanswerable'."
-)
 
 
 # Qwen2.5-7B를 4-bit(NF4)로 양자화해 로드
@@ -41,15 +34,6 @@ def load_generator(model_name: str = MODEL_NAME):
     return model, tokenizer
 
 
-# 근거 문단과 질문을 system/user 메시지로 조립. 근거 없으면 '(근거 없음)'
-
-def build_messages(question: str, evidence: list[str]) -> list[dict]:
-    joined = "\n\n".join(evidence) if evidence else "(근거 없음)"
-    user = f"Evidence:\n{joined}\n\nQuestion: {question}"
-    return [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": user},
-    ]
 
 
 # 근거로 답을 생성해 문자열로 돌려준다(그리디 디코딩)
