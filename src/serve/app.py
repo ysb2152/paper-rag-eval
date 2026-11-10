@@ -1,15 +1,15 @@
 import json
 from contextlib import asynccontextmanager
 from pathlib import Path
-from threading import Event
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from src.retrieve.embed import load_embedder,search_embed
 from src.retrieve.rerank import load_reranker,rerank
-from src.generate.qwen import load_generator,generate_answer,stream_answer
+from src.generate.vllm_client import generate_answer,stream_answer
 from src.ingest.qasper import load_paper
 import numpy as np
+import os
 from src.index.corpus import rank_papers,VECTORS_PATH,META_PATH
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -20,14 +20,12 @@ PAPERS_DIR = Path("data/papers").resolve()
 candidate_k=20
 max_length=512
 
-# 서버 기동 때 임베더·리랭커(CPU)와 생성기(GPU)를 한 번 로딩해 상주시킨다
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
 
     app.state.embedder=load_embedder(device="cpu")
     app.state.reranker=load_reranker(device="cpu")
-    app.state.generator=load_generator()
+    app.state.vllm_base_url=os.environ.get("VLLM_BASE_URL","http://localhost:8000/v1")
     # 코퍼스 인덱스는 /ask/corpus 첫 호출 때 지연 로딩한다. 그래야 인덱스가 없어도 /ask는 뜬다
     app.state.corpus=None
     yield
@@ -88,7 +86,7 @@ def run_pipeline(paper,question,evidence_k):
 
     embed_model, embed_tok, embed_device = app.state.embedder
     rr_model, rr_tok, rr_dev = app.state.reranker
-    gen_model, gen_tok = app.state.generator
+    base_url=app.state.vllm_base_url
     candidate_list = search_embed(paper.paragraphs, question, embed_model, embed_tok, embed_device, candidate_k,
                                   max_length)
     can_list = []
@@ -98,7 +96,7 @@ def run_pipeline(paper,question,evidence_k):
     evidence_list = []
     for ele in evidence:
         evidence_list.append(ele.paragraph.text)
-    answer = generate_answer(question, evidence_list, gen_model, gen_tok)
+    answer = generate_answer(question, evidence_list,base_url)
     abstained = is_abstain(answer)
 
     return (answer,evidence_list,abstained)
@@ -124,7 +122,7 @@ def sse(payload):
 def ask_stream(req: AskRequest):
     embed_model, embed_tok, embed_device = app.state.embedder
     rr_model,rr_tok,rr_dev=app.state.reranker
-    gen_model, gen_tok = app.state.generator
+    base_url=app.state.vllm_base_url
     paper=safe_paper(req.paper_path)
     candidate_list=search_embed(paper.paragraphs,req.question,embed_model,embed_tok,embed_device,candidate_k,max_length)
     can_list=[]
@@ -135,20 +133,18 @@ def ask_stream(req: AskRequest):
     for ele in evidence:
         evidence_list.append(ele.paragraph.text)
 
-    # 클라이언트가 스트림 도중 끊기면 제너레이터가 닫히며 finally가 돌고, stop_event로 생성 스레드도 멈춘다
-    stop_event=Event()
+
 
     def event_stream():
-        try:
-            yield sse({"type": "evidence", "evidence": evidence_list})
-            pieces = []
-            for piece in stream_answer(req.question, evidence_list, gen_model, gen_tok, stop_event=stop_event):
-                pieces.append(piece)
-                yield sse({"type": "token", "text": piece})
-            answer = "".join(pieces).strip()
-            yield sse({"type": "done", "abstained": is_abstain(answer)})
-        finally:
-            stop_event.set()
+
+        yield sse({"type": "evidence", "evidence": evidence_list})
+        pieces = []
+        for piece in stream_answer(req.question, evidence_list, base_url):
+            pieces.append(piece)
+            yield sse({"type": "token", "text": piece})
+        answer = "".join(pieces).strip()
+        yield sse({"type": "done", "abstained": is_abstain(answer)})
+
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 

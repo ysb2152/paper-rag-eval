@@ -1,0 +1,12 @@
+# 서빙 컨테이너(app) 의존성. 생성은 vLLM 컨테이너로 분리하므로
+# 여기엔 검색(임베더·리랭커)과 vLLM HTTP 호출에 필요한 것만 둔다.
+# torch는 CPU 전용 휠로 Dockerfile에서 먼저 설치한다(임베더/리랭커가 GPU 없이 돈다).
+sentence-transformers>=3.0
+FlagEmbedding>=1.2
+faiss-cpu>=1.8
+rank-bm25>=0.2.2
+numpy>=1.26
+openai>=1.0
+fastapi>=0.110
+uvicorn>=0.29
+pydantic>=2.0

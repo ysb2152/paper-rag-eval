@@ -1,0 +1,45 @@
+# vLLM(AWQ, GPU)으로 7B를 서빙하고, 앱(검색 CPU)이 그 서버에 HTTP로 생성을 맡긴다.
+# 앱 생성 백엔드가 in-process transformers → vLLM 호출로 바뀌는 구성이다(B-24의 vllm_client 사용).
+services:
+  vllm:
+    image: vllm/vllm-openai:latest
+    command: >
+      --model Qwen/Qwen2.5-7B-Instruct-AWQ
+      --gpu-memory-utilization 0.85
+      --max-model-len 4096
+      --enforce-eager
+      --dtype float16
+      --port 8000
+    # 호스트 HF 캐시를 마운트해 이미 받아둔 AWQ 가중치를 재사용한다(재다운로드 없음).
+    volumes:
+      - ${HOME}/.cache/huggingface:/root/.cache/huggingface
+    ports:
+      - "8001:8000"   # 디버그용으로 호스트에도 노출
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    # 모델 로딩이 끝나 /health가 뜰 때까지 앱을 기다리게 한다.
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 300s
+
+  app:
+    build: .
+    depends_on:
+      vllm:
+        condition: service_healthy
+    # 앱이 이 주소로 생성을 호출한다(compose 내부 네트워크의 vllm 서비스).
+    environment:
+      - VLLM_BASE_URL=http://vllm:8000/v1
+    # 임베더·리랭커(bge)를 처음 받으면 이 캐시에 저장·재사용된다.
+    volumes:
+      - ${HOME}/.cache/huggingface:/root/.cache/huggingface
+    ports:
+      - "8000:8000"   # 데모 UI: http://localhost:8000

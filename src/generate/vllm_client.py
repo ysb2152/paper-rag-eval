@@ -17,3 +17,11 @@ def generate_answer(
 
 
 
+def stream_answer(question,evidence,base_url,max_new_tokens=64):
+
+    messages=build_messages(question,evidence)
+    client = openai.OpenAI(base_url=base_url, api_key="EMPTY")
+    response=client.chat.completions.create(messages=messages,model=MODEL_NAME,temperature=0,max_tokens=max_new_tokens,stream=True)
+    for chunk in response:
+        if chunk.choices[0].delta.content:
+            yield chunk.choices[0].delta.content
