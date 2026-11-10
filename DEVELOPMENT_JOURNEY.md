@@ -6,6 +6,8 @@
 
 | 날짜(ISO) | 분류 | 내용 | 관련ID |
 |---|---|---|---|
+| 2026-11-10 | result | vLLM 서빙 before/after(oracle 51문항·3080 10GB·max_new_tokens 64·greedy): after=vLLM AWQ 동시성 K1~16 speedup 1.02→12.65×(wall 120.6→9.7s)·단건 p95 3.07s·F1 0.535·VRAM 9.4/10.2GB, before=transformers NF4 단건 mean 0.63s·순차 32.2s·동시성 불가·F1 0.515. 단건은 transformers 우위(HTTP+enforce-eager 교란), vLLM 가치는 동시성. 품질 AWQ≥NF4 | B-24 |
+| 2026-11-10 | feat | vLLM 서빙 측정 하네스 — OpenAI 호환 vllm_client(HTTP·torch 불요)·prompt.py 공유·serving_benchmark(순차 latency + ThreadPoolExecutor 동시 throughput). build_messages·oracle 근거 공유로 before/after 공정비교 | B-24 |
 | 2026-10-24 | result | held-out 최종 평가(train 미사용 51~60편): 검색 dense→리랭커 Hit@5 0.682(dev 0.692)·oracle-7B F1 0.528(0.533)·검색근거 F1 0.368(0.416). 검색·천장 거의 동일 → 작동점 일반화, 과적합 신호 없음 | B-23 |
 | 2026-10-24 | result | ② 리랭커 ablation(라우팅 통과 47문항, 논문 내 dense top-20→리랭커 top-5): Hit@5 dense 0.660 vs 리랭커 0.596, 쌍대 불일치 6:3·McNemar p≈0.51 → 이득 미확인(노이즈). 병목은 생성이라 ②는 레버 아님 | B-22 |
 | 2026-10-23 | feat | P0-7 코퍼스 서빙 — 논문 미지정 질문을 top-1 라우팅→선택 논문 내 검색(dense+리랭커)→생성하는 /ask/corpus + UI 모드 토글·라우팅 논문 표시. run_pipeline으로 /ask와 코어 공유, 코퍼스 인덱스 lifespan 1회 로딩. 브라우저 확인 | B-21 |
@@ -450,6 +452,26 @@ C-2 로드맵에 열어 둔 "② 리랭커" 항목을 측정했다. B-20의 ②�
 **결과: 작동점이 일반화된다.** 검색(dense→리랭커 Hit@5)과 oracle 생성(F1)은 dev와 거의 동일(Δ 0.010·0.005)해 핵심 결정이 미사용 논문에서 유지된다 — dev 과적합 신호 없음. 검색근거 F1만 −0.048 낮은데, oracle이 거의 같으니 생성기 일반화 문제가 아니라 held-out 검색이 약간 덜 잡힌 몫(dense Hit@5도 0.591로 소폭 낮음)과 소표본(44) 탓이다. held-out 22문항에서 bm25→리랭커(0.727)가 dense→리랭커(0.682)를 앞섰으나 표본이 작아 dev의 dense_rerank 우위(B-7)를 뒤집지는 않는다.
 
 원칙: 작동점은 튜닝에 안 쓴 데이터에서 한 번 재확인해야 "측정 규율"이 완성된다. 천장(oracle)과 실제(검색근거)를 같이 재면 일반화 격차가 검색 탓인지 생성 탓인지 분리된다.
+
+## B-24. vLLM 서빙으로 바꾸면 무엇이 좋아지나 — AWQ vLLM vs transformers NF4 before/after
+
+포트폴리오 마감 뒤 후속으로 서빙 엔진 축을 측정했다. 지금까지 7B 생성은 transformers + bitsandbytes NF4를 한 프로세스(in-process)로 돌렸다(B-8·B-14). 운영 서빙에선 동시 요청 처리가 관건이라 vLLM(OpenAI 호환 서버)로 바꿨을 때의 이득을 before/after로 쟀다. after = `Qwen2.5-7B-Instruct-AWQ`를 vLLM으로 서빙(gpu-memory-utilization 0.85·max-model-len 4096·enforce-eager, RTX 3080 10GB·WSL2), before = `Qwen2.5-7B-Instruct`를 transformers NF4로 in-process. 둘 다 같은 oracle 51문항(앞 10편)·max_new_tokens 64·greedy. 공정 비교를 위해 프롬프트([`build_messages`](src/generate/prompt.py))와 oracle 근거를 공유하고, vLLM 쪽은 torch 없는 경량 HTTP 클라이언트([`vllm_client.py`](src/generate/vllm_client.py))로만 호출했다. 측정은 [`serving_benchmark.py`](scripts/serving_benchmark.py)로 순차 latency와 동시(`ThreadPoolExecutor`) throughput을 같이 냈다.
+
+동시성 스윕(vLLM AWQ, K = 동시 요청 수):
+
+| K | wall_time | throughput | speedup | mean_f1 |
+|---|---|---|---|---|
+| 1 | 120.6s | 0.42 req/s | 1.02× | 0.535 |
+| 2 | 61.9s | 0.82 | 1.99× | 0.536 |
+| 4 | 30.8s | 1.66 | 4.00× | 0.535 |
+| 8 | 18.4s | 2.77 | 6.69× | 0.535 |
+| 16 | 9.7s | 5.25 | 12.65× | 0.535 |
+
+K=1~4는 거의 선형, K=16에서 12.65×(9.7s). `generate_answer`가 HTTP 대기(I/O 블로킹)라 대기 중 GIL이 풀려 K개 요청이 서버로 몰리고 vLLM이 배치로 처리한다 — in-process transformers는 모델이 한 프로세스라 이 배치가 원천 불가다. 서빙 VRAM 9.4/10.2 GB(vLLM이 gpu-memory-utilization 0.85로 모델+KV 선점). before(transformers NF4)는 단건 latency mean 0.63s/median 0.51s/p95 1.93s, 51문항 순차 총 32.2s, mean_f1 0.515.
+
+**결과: vLLM의 이득은 단건 지연이 아니라 동시 부하의 처리량이다.** 단건 latency만 보면 오히려 transformers가 빠르다(0.63s vs vLLM 2.41s). vLLM이 단건에서 느린 건 ⑴ 호출마다 `openai` 클라이언트를 새로 만들어 HTTP 연결을 매번 셋업, ⑵ `--enforce-eager`로 CUDA graph를 끔, ⑶ 서버 스케줄러 오버헤드 때문이고 in-process transformers엔 이 비용이 없다. 반면 동시성에선 vLLM이 K=16에서 51문항을 9.7s에 처리해 transformers의 유일한 선택지인 순차 32.2s 대비 3.3× 빠르고, 동시 사용자가 늘수록 격차가 커진다. **품질 가드도 통과: AWQ(F1 0.535) ≥ NF4(0.515)**, extractive에서 AWQ가 더 좋았다(0.584 vs 0.541) — 양자화를 AWQ로 바꿔도 F1 손해가 없다(NF4가 B-17 v3의 0.533보다 낮은 건 transformers 5.17 버전차·51문항 노이즈).
+
+원칙: 서빙 엔진은 "단건 지연"이 아니라 "동시 부하에서의 처리량"으로 비교해야 한다. before/after에 런타임·클라이언트 생성·CUDA graph 같은 교란변수가 섞이면 "vLLM이 다 빠르다"는 과잉 주장이 되므로, 이득이 성립하는 축(throughput)을 분명히 한정한다.
 
 ---
 
