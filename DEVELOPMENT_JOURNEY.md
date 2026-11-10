@@ -6,6 +6,7 @@
 
 | 날짜(ISO) | 분류 | 내용 | 관련ID |
 |---|---|---|---|
+| 2026-11-11 | feat | 컨테이너화 — docker-compose 2-서비스로 서빙 분리: vLLM(AWQ·GPU) + FastAPI 앱(검색 CPU). 앱 생성 백엔드를 in-process transformers→vLLM HTTP 위임(VLLM_BASE_URL)·vllm_client 스트리밍. WSL2 Docker+NVIDIA toolkit·GPU 패스스루·HF 캐시 마운트·healthcheck. 전체 compose up으로 /ask·/ask/stream·웹 UI end-to-end 확인 | B-25 |
 | 2026-11-10 | result | vLLM 서빙 before/after(oracle 51문항·3080 10GB·max_new_tokens 64·greedy): after=vLLM AWQ 동시성 K1~16 speedup 1.02→12.65×(wall 120.6→9.7s)·단건 p95 3.07s·F1 0.535·VRAM 9.4/10.2GB, before=transformers NF4 단건 mean 0.63s·순차 32.2s·동시성 불가·F1 0.515. 단건은 transformers 우위(HTTP+enforce-eager 교란), vLLM 가치는 동시성. 품질 AWQ≥NF4 | B-24 |
 | 2026-11-10 | feat | vLLM 서빙 측정 하네스 — OpenAI 호환 vllm_client(HTTP·torch 불요)·prompt.py 공유·serving_benchmark(순차 latency + ThreadPoolExecutor 동시 throughput). build_messages·oracle 근거 공유로 before/after 공정비교 | B-24 |
 | 2026-10-24 | result | held-out 최종 평가(train 미사용 51~60편): 검색 dense→리랭커 Hit@5 0.682(dev 0.692)·oracle-7B F1 0.528(0.533)·검색근거 F1 0.368(0.416). 검색·천장 거의 동일 → 작동점 일반화, 과적합 신호 없음 | B-23 |
@@ -472,6 +473,19 @@ K=1~4는 거의 선형, K=16에서 12.65×(9.7s). `generate_answer`가 HTTP 대�
 **결과: vLLM의 이득은 단건 지연이 아니라 동시 부하의 처리량이다.** 단건 latency만 보면 오히려 transformers가 빠르다(0.63s vs vLLM 2.41s). vLLM이 단건에서 느린 건 ⑴ 호출마다 `openai` 클라이언트를 새로 만들어 HTTP 연결을 매번 셋업, ⑵ `--enforce-eager`로 CUDA graph를 끔, ⑶ 서버 스케줄러 오버헤드 때문이고 in-process transformers엔 이 비용이 없다. 반면 동시성에선 vLLM이 K=16에서 51문항을 9.7s에 처리해 transformers의 유일한 선택지인 순차 32.2s 대비 3.3× 빠르고, 동시 사용자가 늘수록 격차가 커진다. **품질 가드도 통과: AWQ(F1 0.535) ≥ NF4(0.515)**, extractive에서 AWQ가 더 좋았다(0.584 vs 0.541) — 양자화를 AWQ로 바꿔도 F1 손해가 없다(NF4가 B-17 v3의 0.533보다 낮은 건 transformers 5.17 버전차·51문항 노이즈).
 
 원칙: 서빙 엔진은 "단건 지연"이 아니라 "동시 부하에서의 처리량"으로 비교해야 한다. before/after에 런타임·클라이언트 생성·CUDA graph 같은 교란변수가 섞이면 "vLLM이 다 빠르다"는 과잉 주장이 되므로, 이득이 성립하는 축(throughput)을 분명히 한정한다.
+
+## B-25. 컨테이너화 — vLLM 서버와 앱을 docker-compose 2-서비스로 분리
+
+B-24에서 생성을 vLLM(OpenAI 호환 서버)로 뺀 걸 배포 형태로 묶었다. 그동안 앱(FastAPI)은 검색·리랭크·생성을 한 프로세스에서 다 했지만(B-14), 생성만 GPU를 크게 먹고 검색은 CPU로 충분하므로 두 관심사를 컨테이너로 쪼갰다. `vllm` 서비스는 `Qwen2.5-7B-Instruct-AWQ`를 GPU로 서빙하고, `app` 서비스는 임베더·리랭커(CPU)로 근거를 찾아 `VLLM_BASE_URL`로 vLLM에 생성을 HTTP 위임한다. 앱 이미지엔 torch를 CPU 휠로만 넣어 7B 스택을 빼 가볍게 유지했다.
+
+- 앱 전환: [`app.py`](src/serve/app.py)가 `load_generator()` 대신 `VLLM_BASE_URL`을 읽어 [`vllm_client`](src/generate/vllm_client.py)로 호출. 스트리밍도 TextIteratorStreamer+스레드 대신 OpenAI `stream=True` 제너레이터로 교체.
+- 오케스트레이션: `vllm`은 GPU 패스스루·호스트 HF 캐시 마운트·/health healthcheck, `app`은 depends_on service_healthy로 vLLM이 뜬 뒤 기동.
+- 환경: WSL2 Docker Engine + NVIDIA Container Toolkit, `docker run --gpus all`로 RTX 3080 패스스루 확인.
+- 검증: `docker compose up`으로 vLLM(AWQ 로드)→app 기동까지 올리고 /ask·/ask/stream(토큰 스트림)·웹 UI end-to-end 확인.
+
+함정 셋: ⑴ slim 기본 pip가 torch CPU 휠을 못 집어 소스 빌드로 떨어져 pip 업그레이드 선행, ⑵ vLLM 이미지에 `python` 심볼릭이 없어 healthcheck를 `python3`로, ⑶ 검색 임포트 체인이 `rank_bm25`를 끌어와 서빙 requirements에 추가.
+
+원칙: GPU를 크게 먹는 생성과 CPU로 충분한 검색은 관심사가 다르니, 한 프로세스에 묶기보다 컨테이너 경계로 쪼개면 자원·스케일을 각각 독립적으로 둘 수 있다.
 
 ---
 

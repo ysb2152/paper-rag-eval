@@ -90,7 +90,7 @@ python -m venv .venv
 
 ![단일 논문 웹 UI 데모](docs/demo.gif)
 
-논문 한 편과 질문을 주면 검색(dense→리랭커)으로 근거 문단을 모아 로컬 7B가 답하고, 인용 문단과 함께 반환한다. 근거가 답을 담지 못하면 보류한다(`abstained`). 세 모델은 서버가 뜰 때 한 번 로딩해 상주시킨다. 10GB VRAM 제약 때문에 경량 모델(임베더·리랭커)은 CPU에, 7B만 GPU 4bit에 둔다. 그래서 7B 로드(~28초)는 기동 때 한 번뿐이고 이후 요청은 바로 답한다(B-14). 이 서버는 단일 사용자 로컬 데모를 전제로 한다 — 7B 한 벌을 공유하므로 동시 요청 큐잉은 두지 않았고, `/ask`가 읽는 논문은 `data/papers` 아래로 제한한다.
+논문 한 편과 질문을 주면 검색(dense→리랭커)으로 근거 문단을 모아 로컬 7B가 답하고, 인용 문단과 함께 반환한다. 근거가 답을 담지 못하면 보류한다(`abstained`). 세 모델은 서버가 뜰 때 한 번 로딩해 상주시킨다. 10GB VRAM 제약 때문에 경량 모델(임베더·리랭커)은 CPU에, 7B만 GPU 4bit에 둔다. 그래서 7B 로드(~28초)는 기동 때 한 번뿐이고 이후 요청은 바로 답한다(B-14). 이 서버는 단일 사용자 로컬 데모를 전제로 한다 — 7B 한 벌을 공유하므로 동시 요청 큐잉은 두지 않았고, `/ask`가 읽는 논문은 `data/papers` 아래로 제한한다. (이 in-process 구성은 초기 설계이고, 이후 생성을 vLLM 서버로 분리해 docker-compose로 컨테이너화했다 — 아래 **컨테이너화** 참고.)
 
 루트 `/`에서는 전용 웹 UI를 제공한다. 질문을 넣으면 `/ask/stream`(SSE)으로 생성 토큰이 실시간으로 흐르고, 인용 문단과 보류 배지를 함께 보여준다(B-16).
 
@@ -106,6 +106,18 @@ python -m venv .venv
 ![코퍼스 모드 데모](docs/demo-corpus.jpg)
 
 질문만 주면 코퍼스 50편에서 top-1 논문을 고르고(라우팅), 그 논문 안에서 검색(dense→리랭커)→생성으로 답한다. 응답에는 라우팅된 논문 ID를 함께 표시한다. 웹 UI에서 "코퍼스 (자동 선택)" 모드를 고르면 되고, 위 예에서 "How big is the seed lexicon used for training?"는 1909.00694로 라우팅돼 근거 5개와 함께 답했다(B-21). 이 모드는 코퍼스 문단 인덱스가 필요하다(재생성: `python -m src.index.corpus`).
+
+**컨테이너화 — vLLM 서빙 + docker-compose (2-서비스)**
+
+![docker-compose 풀스택 데모 — 단일 논문 QA](docs/demo-compose.jpg)
+
+생성이 GPU를 크게 먹고 검색은 CPU로 충분하므로 서빙을 두 컨테이너로 쪼갰다. `vllm` 서비스가 Qwen2.5-7B-Instruct-AWQ를 GPU로 서빙하고, `app`(FastAPI)은 임베더·리랭커를 CPU로 돌려 근거를 찾은 뒤 `VLLM_BASE_URL`로 vLLM에 생성을 HTTP 위임한다. 앱 이미지엔 torch를 CPU 휠로만 넣어 7B 스택을 빼 가볍게 유지했다. 엔진 교체 before/after(단건 지연 vs 동시 처리량)는 [B-24](DEVELOPMENT_JOURNEY.md), 컨테이너화는 [B-25](DEVELOPMENT_JOURNEY.md).
+
+```powershell
+# WSL2 + Docker(NVIDIA Container Toolkit) 환경
+docker compose up        # vllm(AWQ, GPU) healthy 후 app 기동, HF 모델 자동 다운로드
+# http://localhost:8000  데모 웹 UI (app → vLLM HTTP)
+```
 
 ## 아키텍처
 
