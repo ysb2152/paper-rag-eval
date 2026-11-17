@@ -6,6 +6,7 @@
 
 | 날짜(ISO) | 분류 | 내용 | 관련ID |
 |---|---|---|---|
+| 2026-11-11 | decision | Claude 생성 축 기각(P0-3 개정) — `claude-sonnet-5`/`claude-opus-5` 생성 비교는 실행하지 않고 로컬 스택으로 마감. 생성 모델 ablation은 로컬 모델 스윕(B-17)으로 측정 완료, 외부 API 과금·재현성 부담 회피 | P0-3 |
 | 2026-11-11 | feat | 컨테이너화 — docker-compose 2-서비스로 서빙 분리: vLLM(AWQ·GPU) + FastAPI 앱(검색 CPU). 앱 생성 백엔드를 in-process transformers→vLLM HTTP 위임(VLLM_BASE_URL)·vllm_client 스트리밍. WSL2 Docker+NVIDIA toolkit·GPU 패스스루·HF 캐시 마운트·healthcheck. 전체 compose up으로 /ask·/ask/stream·웹 UI end-to-end 확인 | B-25 |
 | 2026-11-10 | result | vLLM 서빙 before/after(oracle 51문항·3080 10GB·max_new_tokens 64·greedy): after=vLLM AWQ 동시성 K1~16 speedup 1.02→12.65×(wall 120.6→9.7s)·단건 p95 3.07s·F1 0.535·VRAM 9.4/10.2GB, before=transformers NF4 단건 mean 0.63s·순차 32.2s·동시성 불가·F1 0.515. 단건은 transformers 우위(HTTP+enforce-eager 교란), vLLM 가치는 동시성. 품질 AWQ≥NF4 | B-24 |
 | 2026-11-10 | feat | vLLM 서빙 측정 하네스 — OpenAI 호환 vllm_client(HTTP·torch 불요)·prompt.py 공유·serving_benchmark(순차 latency + ThreadPoolExecutor 동시 throughput). build_messages·oracle 근거 공유로 before/after 공정비교 | B-24 |
@@ -77,6 +78,7 @@
 - **근거:** (1) 정량 백본이 무료라 예산 리스크 제거·완전 로컬 재현 가능(포트폴리오 강점). (2) Qasper 는 원래 F1 채점 벤치마크 → 표준 지표가 임시 LLM-judge보다 객관적. (3) Claude 를 "프리미엄 비교 대상"으로 두면 로컬 vs API 트레이드오프를 **측정으로** 보여줄 수 있음.
 - **기각:** 생성·채점 전면 Claude — 예산 리스크 + 채점 객관성 약화. / 채점 전면 로컬 LLM-judge — 7B judge 신뢰도 부족, 표준 F1 대비 이점 없음.
 - **미지수:** 로컬 NLI 모델 선정(예: DeBERTa-v3 MNLI/ANLI)·faithfulness 근사 정확도, Qasper unanswerable/abstractive 답변의 F1 처리, 7B 생성 VRAM(임베딩·리랭커와 동시 상주 시 스케줄링).
+- **개정(2026-11-11): Claude 생성 축 기각.** 위 선택 축으로 뒀던 `claude-sonnet-5`/`claude-opus-5` 생성 비교는 실행하지 않고 프로젝트를 로컬 스택 기준으로 마감한다. 생성 모델 ablation은 로컬 모델 스윕(B-17: Qwen2.5-7B·Llama-3.1-8B·Qwen2.5-3B·Mistral-7B)으로 충분히 측정했고, 외부 API 과금·재현성 부담을 피한다. (LLM-judge 상관 검증 축은 미실행 상태 그대로 둔다 — 여전히 선택.)
 
 ### P0-4. 벡터 스토어 = FAISS (로컬), pgvector 는 ablation 축
 - **결정:** FAISS(flat/IVF)로 시작. pgvector 는 "운영형 스토어" 비교 축으로 후순위.
@@ -131,7 +133,7 @@ P0-7 확장부(코퍼스에서 관련 논문을 찾아 그 논문에 질문)를 
 
 ## Ablation 축 (예정)
 
-청킹(크기/overlap, fixed vs semantic) · 임베딩 모델 · 검색(dense vs hybrid BM25+dense) · 리랭커(none vs bge-reranker) · top-k · 프롬프트 변형 · **생성 모델(로컬 Qwen2.5-7B vs claude-sonnet-5 vs claude-opus-5)**.
+청킹(크기/overlap, fixed vs semantic) · 임베딩 모델 · 검색(dense vs hybrid BM25+dense) · 리랭커(none vs bge-reranker) · top-k · 프롬프트 변형 · **생성 모델(로컬 Qwen2.5-7B·Llama-3.1-8B·Qwen2.5-3B·Mistral-7B)**. 생성 축의 Claude(claude-sonnet-5/opus-5) 비교는 기각(P0-3 2026-11-11 개정) — 로컬 모델 스윕으로 한정.
 
 ## 주차별 로드맵
 
@@ -143,7 +145,7 @@ P0-7 확장부(코퍼스에서 관련 논문을 찾아 그 논문에 질문)를 
 - [~] **Week 3 — Ablation + 회귀.** 청킹·임베딩·hybrid·리랭커·top-k·프롬프트 비교표 → best config. **회귀 하네스**(임계값 + CI). (보류: hybrid·리랭커·top-k·프롬프트·생성모델 ablation과 회귀 CI 완료(B-11~B-15, B-22), 청킹·임베딩 대안 ablation은 후속)
 - [x] **W3 중간 단계 — 회귀 하네스 CPU 티어 MVP.** bm25 지표를 골든과 비교해 하락 시 실패(exit 코드), `--update-baseline`로 골든 생성, 골든없음·n_questions 가드, argparse CLI(B-11). dense/rerank(GPU 티어)·GitHub Actions 배선은 후속.
 - [x] **W3 중간 단계 — 회귀 하네스 완성.** GitHub Actions CPU 티어 자동 게이트(push/PR에 unittest+bm25 골든), GPU 티어(dense·dense_rerank) 러너 추가·`--tier` 선택·골든 병합, ablation 표 생성기(B-12). 검색 축 ablation은 완료. 청킹·프롬프트·생성 모델 축 비교표는 Week 3 본 범위로 후속.
-- [x] **W3 중간 단계 — top-k 스윕 + ablation 축 정리.** candidate_k 고정, top-k 3/5/10 스윕으로 검색 지표의 k 의존성 측정(MRR 둔감·recall 단조, 작동점 k는 답 축 미측정이라 k=5 보류). 프롬프트·생성 모델 축 표를 EVALUATION Ablation 절로 승격·결정 ID 부여(B-13). 청킹·임베딩 대안·생성 모델(Claude) 축은 후속.
+- [x] **W3 중간 단계 — top-k 스윕 + ablation 축 정리.** candidate_k 고정, top-k 3/5/10 스윕으로 검색 지표의 k 의존성 측정(MRR 둔감·recall 단조, 작동점 k는 답 축 미측정이라 k=5 보류). 프롬프트·생성 모델 축 표를 EVALUATION Ablation 절로 승격·결정 ID 부여(B-13). 청킹·임베딩 대안 축은 후속, 생성 모델(Claude) 축은 기각(P0-3 2026-11-11 개정).
 - [x] **W3 보강 — 답 축 top-k 측정.** evidence_k 3/5/10에서 Answer-F1을 측정해 B-13의 보류 k 결정을 실측 확정. 비단조로 k=5 최대(k=10은 노이즈로 하락) → 작동점 k=5(B-15).
 - [x] **Week 4 — 서빙 + 마감.** FastAPI + 최소 UI(스트리밍+인용) · 데모 GIF · 문서 마감.
 - [x] **W4 중간 단계 — FastAPI 서빙 + 데모.** `/ask` 엔드포인트(검색→7B 생성→보류)와 lifespan 기동 1회 로딩, 경량 모델 CPU + 7B GPU 4bit 상주로 10GB VRAM 제약 해결. Swagger `/docs` 수동 확인·데모 GIF(B-14). 스트리밍 응답·전용 UI는 B-16에서 추가.
@@ -383,7 +385,7 @@ B-8은 생성기를 Qwen2.5-7B 하나로 고정했다. 여기서 생성 모델�
 
 **결과(Answer-F1, oracle): Qwen2.5-7B 0.533 > Llama-3.1-8B 0.499 > Qwen2.5-3B 0.380 > Mistral-7B-v0.3 0.332.** 크기 축은 3B→7B에서 +0.153로 B-8의 7B 채택을 크기로 뒷받침한다. 계열 축은 Qwen이 앞서고 Llama가 근접, Mistral이 처진다.
 
-다만 **v3 프롬프트가 Qwen에 맞춰 튜닝된 것**이라 계열 비교는 Qwen에 유리하다. Mistral은 챗 템플릿이 별도 system 역할을 받지 않아 지시를 `[INST]` 블록에 접어 넣으므로 간결·보류(Unanswerable) 지시를 덜 따랐을 수 있다. 그래서 이 표는 "Qwen이 본질적으로 우월"이 아니라 "이 프롬프트·조건에서 Qwen 최적, Llama 경쟁력, Mistral 격차"로 읽는다. `claude-sonnet-5`/`claude-opus-5` 생성 축은 P0-3에서 선택 축으로 두었고 이 비교에는 포함하지 않는다(로컬 모델 간 비교에 집중).
+다만 **v3 프롬프트가 Qwen에 맞춰 튜닝된 것**이라 계열 비교는 Qwen에 유리하다. Mistral은 챗 템플릿이 별도 system 역할을 받지 않아 지시를 `[INST]` 블록에 접어 넣으므로 간결·보류(Unanswerable) 지시를 덜 따랐을 수 있다. 그래서 이 표는 "Qwen이 본질적으로 우월"이 아니라 "이 프롬프트·조건에서 Qwen 최적, Llama 경쟁력, Mistral 격차"로 읽는다. `claude-sonnet-5`/`claude-opus-5` 생성 축은 기각해(P0-3 2026-11-11 개정) 이 비교에 포함하지 않는다(로컬 모델 간 비교에 집중).
 
 원칙: 프롬프트는 생성 모델 계열에 민감하다. 한 모델에 튜닝한 프롬프트로 여러 계열을 비교하면 그 모델에 치우치므로, 엄밀한 계열 비교는 모델별 프롬프트 적응까지 통제해야 한다.
 
@@ -503,7 +505,7 @@ B-24에서 생성을 vLLM(OpenAI 호환 서버)로 뺀 걸 배포 형태로 묶�
 
 **평가와 회귀는 코드로 고정해야 한다.** 수치는 그때그때 돌려 보고 기억하면 된다고 생각했지만, 손으로 적은 수치는 조용히 썩는다. 골든(`baselines/retrieval.json`)을 커밋하고 `--update-baseline`로만 갱신하며, 지표가 골든보다 떨어지면 CI가 실패하도록 게이트를 걸었다(B-11~B-13). CPU 티어는 GitHub Actions로 자동, GPU 티어는 로컬 수동으로 나눠 환경 제약과 자동 회귀를 양립시켰다.
 
-**하드 제약이 설계를 민다.** 좋은 모델을 올리면 끝이라 여겼지만, 10GB VRAM 안에서는 임베더·리랭커를 CPU에 두고 7B만 GPU 4bit로 상주시켜야 세 모델이 공존했다(B-14). 생성 모델 양자화도 AWQ가 환경에 맞지 않아 4bit로 폴백했고(B-8), 매 요청 재임베딩(~18초)은 코퍼스 인덱스를 한 번 만들어 영속화하는 설계로 바꿨다(B-16→B-18). 채점 백본은 비용 때문에 전면 무료·재현 가능(Qasper Answer-F1+로컬 NLI)으로 고정하고 Claude API는 선택 축으로만 남겼다(P0-3). 제약이 오히려 설계 결정을 분명하게 만들었다.
+**하드 제약이 설계를 민다.** 좋은 모델을 올리면 끝이라 여겼지만, 10GB VRAM 안에서는 임베더·리랭커를 CPU에 두고 7B만 GPU 4bit로 상주시켜야 세 모델이 공존했다(B-14). 생성 모델 양자화도 AWQ가 환경에 맞지 않아 4bit로 폴백했고(B-8), 매 요청 재임베딩(~18초)은 코퍼스 인덱스를 한 번 만들어 영속화하는 설계로 바꿨다(B-16→B-18). 채점 백본은 비용 때문에 전면 무료·재현 가능(Qasper Answer-F1+로컬 NLI)으로 고정했고, Claude 생성 축은 끝내 기각해 전부 로컬 스택으로 마감했다(P0-3 2026-11-11 개정). 제약이 오히려 설계 결정을 분명하게 만들었다.
 
 ## C-2. 남은 로드맵
 
