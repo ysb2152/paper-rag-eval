@@ -6,19 +6,20 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from src.retrieve.embed import load_embedder,search_embed
 from src.retrieve.rerank import load_reranker,rerank
-from src.generate.vllm_client import generate_answer,stream_answer
+from src.generate.vllm_client import stream_answer
 from src.ingest.qasper import load_paper
 import numpy as np
 import os
 from src.index.corpus import rank_papers,VECTORS_PATH,META_PATH
+from src.pipeline import candidate_k,max_length,is_abstain
+from src import pipeline
 
 STATIC_DIR = Path(__file__).parent / "static"
 
 # /ask가 읽을 수 있는 논문은 이 디렉터리 안으로 제한한다(임의 로컬 경로 읽기 차단)
 PAPERS_DIR = Path("data/papers").resolve()
 
-candidate_k=20
-max_length=512
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -55,11 +56,6 @@ class CorpusResponse(BaseModel):
     abstained: bool
     routed_paper_id : str
 
-# 모델이 대소문자·끝 마침표를 흔들어도 보류로 보도록 정규화해서 'Unanswerable'을 판정한다
-
-def is_abstain(answer):
-    return answer.strip().rstrip(".").lower() == "unanswerable"
-
 # 요청 경로가 data/papers 안인지 확인하고 논문을 읽는다. 밖이면 400
 
 def safe_paper(paper_path):
@@ -78,37 +74,21 @@ def load_corpus():
         app.state.corpus=(np.load(VECTORS_PATH),json.load(open(META_PATH,encoding="utf-8")))
     return app.state.corpus
 
-# 검색→리랭크→생성으로 답과 근거를 돌려준다. 'Unanswerable'이면 보류
-
-
+# app.state 에 올려 둔 자원을 꺼내 파이프라인에 넘기는 역할만 한다.
+# 검색·리랭크·생성 본문은 src/pipeline.py 에 있고 에이전트도 같은 함수를 쓴다.
 
 def run_pipeline(paper,question,evidence_k):
-
-    embed_model, embed_tok, embed_device = app.state.embedder
-    rr_model, rr_tok, rr_dev = app.state.reranker
-    base_url=app.state.vllm_base_url
-    candidate_list = search_embed(paper.paragraphs, question, embed_model, embed_tok, embed_device, candidate_k,
-                                  max_length)
-    can_list = []
-    for ele in candidate_list:
-        can_list.append(ele.paragraph)
-    evidence = rerank(question, can_list, rr_model, rr_tok, rr_dev, evidence_k, max_length)
-    evidence_list = []
-    for ele in evidence:
-        evidence_list.append(ele.paragraph.text)
-    answer = generate_answer(question, evidence_list,base_url)
-    abstained = is_abstain(answer)
-
-    return (answer,evidence_list,abstained)
+    return pipeline.run_pipeline(paper,question,evidence_k,app.state.embedder,app.state.reranker,app.state.vllm_base_url)
 
 @app.post("/ask", response_model=AskResponse)
 
 def ask(req: AskRequest):
 
     paper = safe_paper(req.paper_path)
-    answer,evidence_list,abstained=run_pipeline(paper,req.question,req.evidence_k)
+    run_pipeline_result=run_pipeline(paper,req.question,req.evidence_k)
 
-    return AskResponse(answer=answer, evidence=evidence_list,abstained=abstained)
+    return AskResponse(answer=run_pipeline_result["answer"], evidence=run_pipeline_result["evidence"], abstained=run_pipeline_result["abstained"])
+
 
 # payload를 SSE data 한 줄로 포맷
 
@@ -153,9 +133,9 @@ def ask_corpus(req: CorpusRequest):
     ranked=rank_papers(req.question,*load_corpus(),*app.state.embedder)
     paper_id=ranked[0][0]
     paper= load_paper("data/papers/" + paper_id + ".json")
-    answer,evidence_list,abstained=run_pipeline(paper,req.question,req.evidence_k)
+    result=run_pipeline(paper,req.question,req.evidence_k)
 
-    return CorpusResponse(answer=answer,evidence=evidence_list,abstained=abstained,routed_paper_id=paper_id)
+    return CorpusResponse(answer=result["answer"], evidence=result["evidence"], abstained=result["abstained"],routed_paper_id=paper_id)
 
 
 
